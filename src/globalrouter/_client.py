@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import os
+from threading import Thread
 from time import sleep
 from typing import Any, Optional, TypeVar, cast
 
@@ -75,10 +77,16 @@ class GlobalRouter:
         self.three_d = ThreeDResource(self)
 
     def close(self) -> None:
-        self._client.close()
+        try:
+            self._client.close()
+        finally:
+            self._close_async_client_from_sync()
 
     async def aclose(self) -> None:
-        await self._async_client.aclose()
+        try:
+            await self._async_client.aclose()
+        finally:
+            self._client.close()
 
     def __enter__(self) -> "GlobalRouter":
         return self
@@ -91,6 +99,31 @@ class GlobalRouter:
 
     async def __aexit__(self, exc_type: object, exc: object, traceback: object) -> None:
         await self.aclose()
+
+    def _close_async_client_from_sync(self) -> None:
+        if self._async_client.is_closed:
+            return
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(self._async_client.aclose())
+            return
+
+        error: BaseException | None = None
+
+        def close_in_thread() -> None:
+            nonlocal error
+            try:
+                asyncio.run(self._async_client.aclose())
+            except BaseException as exc:
+                error = exc
+
+        thread = Thread(target=close_in_thread)
+        thread.start()
+        thread.join()
+        if error is not None:
+            raise error
 
     @staticmethod
     def verify_webhook_signature(secret: str, payload: bytes, signature: str) -> bool:
