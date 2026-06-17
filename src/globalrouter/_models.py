@@ -18,6 +18,10 @@ class APIResponse(GlobalRouterModel):
     status: Optional[str] = None
 
 
+class AudioTranscription(GlobalRouterModel):
+    text: str
+
+
 class ChatCompletion(GlobalRouterModel):
     id: str
     object: str = "chat.completion"

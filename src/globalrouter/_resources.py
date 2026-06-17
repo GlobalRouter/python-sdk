@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from globalrouter._models import (
     APIResponse,
+    AudioTranscription,
     ChatCompletion,
     ChatCompletionChunk,
     DeletedObject,
@@ -537,11 +538,11 @@ class AudioResource(BaseResource):
         self,
         request: Optional[Mapping[str, Any]] = None,
         **params: Any,
-    ) -> APIResponse:
+    ) -> AudioTranscription:
         return self._client.request_model(
             "POST",
             "/v1/audio/transcriptions",
-            APIResponse,
+            AudioTranscription,
             json_body=self._payload(request, params),
         )
 
@@ -549,11 +550,11 @@ class AudioResource(BaseResource):
         self,
         request: Optional[Mapping[str, Any]] = None,
         **params: Any,
-    ) -> APIResponse:
+    ) -> AudioTranscription:
         return await self._client.request_model_async(
             "POST",
             "/v1/audio/transcriptions",
-            APIResponse,
+            AudioTranscription,
             json_body=self._payload(request, params),
         )
 
