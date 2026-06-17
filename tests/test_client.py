@@ -168,6 +168,38 @@ def test_native_surface_and_sse_streaming() -> None:
         client.close()
 
 
+def test_stream_error_preserves_symbolic_code() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            content=_sse_lines(
+                [
+                    {
+                        "error": {
+                            "code": "ROUTER_RATE_LIMITED",
+                            "message": "rate limited",
+                        }
+                    }
+                ]
+            ),
+        )
+
+    client = GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(GlobalRouterError) as exc_info:
+            list(client.chat.stream(model="mock-chat", messages=[]))
+    finally:
+        client.close()
+
+    assert exc_info.value.status_code == 0
+    assert exc_info.value.code == "ROUTER_RATE_LIMITED"
+    assert exc_info.value.message == "rate limited"
+
+
 @pytest.mark.asyncio
 async def test_async_chat_and_models() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
