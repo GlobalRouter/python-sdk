@@ -168,6 +168,31 @@ def test_native_surface_and_sse_streaming() -> None:
         client.close()
 
 
+def test_streaming_http_error_parses_unread_response_body() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            400,
+            stream=httpx.ByteStream(
+                b'{"error":{"message":"stream failed","metadata":{"router_code":"BAD_STREAM"}}}'
+            ),
+        )
+
+    client = GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(GlobalRouterError) as exc_info:
+            list(client.chat.stream(model="mock-chat", messages=[]))
+    finally:
+        client.close()
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.message == "stream failed"
+    assert exc_info.value.code == "BAD_STREAM"
+
+
 @pytest.mark.asyncio
 async def test_async_chat_and_models() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -192,6 +217,30 @@ async def test_async_chat_and_models() -> None:
     ) as client:
         assert (await client.chat.send_async(model="mock-chat", messages=[])).id == "chat_async"
         assert (await client.models.list_async()).data[0]["id"] == "mock-chat"
+
+
+@pytest.mark.asyncio
+async def test_async_streaming_http_error_parses_unread_response_body() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            400,
+            stream=httpx.ByteStream(
+                b'{"error":{"message":"async stream failed","metadata":{"router_code":"BAD_ASYNC_STREAM"}}}'
+            ),
+        )
+
+    async with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(GlobalRouterError) as exc_info:
+            async for _ in client.chat.stream_async(model="mock-chat", messages=[]):
+                pass
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.message == "async stream failed"
+    assert exc_info.value.code == "BAD_ASYNC_STREAM"
 
 
 def test_error_normalization_and_retries() -> None:
