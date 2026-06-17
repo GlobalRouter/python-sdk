@@ -243,6 +243,7 @@ def test_webhook_signature_verification() -> None:
 
     assert GlobalRouter.verify_webhook_signature("secret", payload, legacy) is True
     assert GlobalRouter.verify_webhook_signature("secret", payload, f"t={timestamp},v1={digest}")
+    assert GlobalRouter.verify_webhook_signature("secret", payload, f"t={timestamp}, v1={digest}")
     assert GlobalRouter.verify_webhook_signature("secret", payload, "sha256=bad") is False
 
 

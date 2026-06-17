@@ -10,7 +10,7 @@ def verify_webhook_signature(secret: str, payload: bytes, signature: str) -> boo
         expected = hmac_new(secret.encode("utf-8"), payload, sha256).hexdigest()
         return compare_digest(expected, signature.removeprefix("sha256="))
 
-    parts = dict(item.split("=", 1) for item in signature.split(",") if "=" in item)
+    parts = dict(item.strip().split("=", 1) for item in signature.split(",") if "=" in item)
     timestamp = parts.get("t")
     provided = parts.get("v1")
     if timestamp is None or provided is None:
