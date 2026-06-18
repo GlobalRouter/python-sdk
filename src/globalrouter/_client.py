@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import os
+import threading
 from time import sleep
 from typing import Any, Optional, TypeVar, cast
 
@@ -48,16 +50,11 @@ class GlobalRouter:
         self.api_key = resolved_api_key
         self.base_url = base_url.rstrip("/")
         self.max_retries = max_retries
-        self._client = httpx.Client(
-            base_url=self.base_url,
-            timeout=timeout_seconds,
-            transport=transport,
-        )
-        self._async_client = httpx.AsyncClient(
-            base_url=self.base_url,
-            timeout=timeout_seconds,
-            transport=async_transport,
-        )
+        self._timeout_seconds = timeout_seconds
+        self._transport = transport
+        self._async_transport = async_transport
+        self._sync_client: Optional[httpx.Client] = None
+        self._async_http_client: Optional[httpx.AsyncClient] = None
 
         self.chat = ChatResource(self)
         self.responses = ResponsesResource(self)
@@ -74,11 +71,36 @@ class GlobalRouter:
         self.audio = AudioResource(self)
         self.three_d = ThreeDResource(self)
 
+    @property
+    def _client(self) -> httpx.Client:
+        if self._sync_client is None:
+            self._sync_client = httpx.Client(
+                base_url=self.base_url,
+                timeout=self._timeout_seconds,
+                transport=self._transport,
+            )
+        return self._sync_client
+
+    @property
+    def _async_client(self) -> httpx.AsyncClient:
+        if self._async_http_client is None:
+            self._async_http_client = httpx.AsyncClient(
+                base_url=self.base_url,
+                timeout=self._timeout_seconds,
+                transport=self._async_transport,
+            )
+        return self._async_http_client
+
     def close(self) -> None:
-        self._client.close()
+        if self._sync_client is not None:
+            self._sync_client.close()
+        self._close_async_client_from_sync()
 
     async def aclose(self) -> None:
-        await self._async_client.aclose()
+        if self._sync_client is not None:
+            self._sync_client.close()
+        if self._async_http_client is not None:
+            await self._async_http_client.aclose()
 
     def __enter__(self) -> "GlobalRouter":
         return self
@@ -254,9 +276,31 @@ class GlobalRouter:
 
     async def _async_sleep_before_retry(self, attempt: int) -> None:
         if attempt < self.max_retries:
-            import asyncio
-
             await asyncio.sleep(min(0.25 * (2**attempt), 1.0))
+
+    def _close_async_client_from_sync(self) -> None:
+        async_client = self._async_http_client
+        if async_client is None or async_client.is_closed:
+            return
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(async_client.aclose())
+            return
+
+        error: list[BaseException] = []
+
+        def close_in_thread() -> None:
+            try:
+                asyncio.run(async_client.aclose())
+            except BaseException as exc:
+                error.append(exc)
+
+        thread = threading.Thread(target=close_in_thread)
+        thread.start()
+        thread.join()
+        if error:
+            raise error[0]
 
 
 def payload_from_mapping(request: Optional[dict[str, Any]], params: dict[str, Any]) -> JSONDict:
