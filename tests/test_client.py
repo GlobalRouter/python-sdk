@@ -101,6 +101,25 @@ def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatc
     assert all(request.headers["authorization"] == "Bearer sk-test-local" for request in requests)
 
 
+def test_sync_context_manager_closes_sync_and_async_clients() -> None:
+    with GlobalRouter(api_key="sk-test-local") as client:
+        sync_client = client._client
+        async_client = client._async_client
+
+    assert sync_client.is_closed is True
+    assert async_client.is_closed is True
+
+
+@pytest.mark.asyncio
+async def test_async_context_manager_closes_sync_and_async_clients() -> None:
+    async with GlobalRouter(api_key="sk-test-local") as client:
+        sync_client = client._client
+        async_client = client._async_client
+
+    assert sync_client.is_closed is True
+    assert async_client.is_closed is True
+
+
 def test_native_surface_and_sse_streaming() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/api/v1/chat/completions":
