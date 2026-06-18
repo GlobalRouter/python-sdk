@@ -66,13 +66,26 @@ def error_from_stream_payload(payload: dict[str, Any]) -> GlobalRouterError:
     if not isinstance(metadata, dict):
         metadata = {}
     return GlobalRouterError(
-        status_code=int(error.get("code") or 0) if isinstance(error, dict) else 0,
-        code=_string(metadata.get("router_code")) or "GLOBALROUTER_STREAM_ERROR",
+        status_code=_stream_status_code(error),
+        code=(
+            _string(metadata.get("router_code"))
+            or (_string(error.get("code")) if isinstance(error, dict) else None)
+            or "GLOBALROUTER_STREAM_ERROR"
+        ),
         message=_string(error.get("message")) or "GlobalRouter stream failed",
         error_type=_string(metadata.get("type")) or "router_error",
         request_id=_string(metadata.get("request_id")),
         response=None,
     )
+
+
+def _stream_status_code(error: Any) -> int:
+    if not isinstance(error, dict):
+        return 0
+    code = error.get("code")
+    if isinstance(code, bool) or not isinstance(code, int):
+        return 0
+    return code
 
 
 def _string(value: Any) -> Optional[str]:

@@ -10,6 +10,7 @@ import httpx
 import pytest
 
 from globalrouter import GlobalRouter, GlobalRouterError
+from globalrouter._errors import error_from_stream_payload
 
 
 def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -233,6 +234,16 @@ def test_error_normalization_and_retries() -> None:
     assert exc_info.value.code == "ROUTER_RATE_LIMITED"
     assert exc_info.value.error_type == "rate_limit_error"
     assert exc_info.value.request_id == "req_1"
+
+
+def test_stream_error_normalization_preserves_string_code() -> None:
+    error = error_from_stream_payload(
+        {"error": {"code": "ROUTER_RATE_LIMITED", "message": "rate limit"}}
+    )
+
+    assert error.status_code == 0
+    assert error.code == "ROUTER_RATE_LIMITED"
+    assert error.message == "rate limit"
 
 
 def test_webhook_signature_verification() -> None:
