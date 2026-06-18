@@ -62,27 +62,25 @@ def error_from_response(response: httpx.Response) -> GlobalRouterError:
 
 def error_from_stream_payload(payload: dict[str, Any]) -> GlobalRouterError:
     error = payload.get("error", {})
-    metadata = error.get("metadata", {}) if isinstance(error, dict) else {}
+    error_body = error if isinstance(error, dict) else {}
+    metadata = error_body.get("metadata", {})
     if not isinstance(metadata, dict):
         metadata = {}
     return GlobalRouterError(
-        status_code=_stream_status_code(error),
+        status_code=_stream_status_code(error_body),
         code=(
             _string(metadata.get("router_code"))
-            or (_string(error.get("code")) if isinstance(error, dict) else None)
+            or _string(error_body.get("code"))
             or "GLOBALROUTER_STREAM_ERROR"
         ),
-        message=_string(error.get("message")) or "GlobalRouter stream failed",
+        message=_string(error_body.get("message")) or "GlobalRouter stream failed",
         error_type=_string(metadata.get("type")) or "router_error",
         request_id=_string(metadata.get("request_id")),
         response=None,
     )
 
 
-def _stream_status_code(error: Any) -> int:
-    if not isinstance(error, dict):
-        return 0
-
+def _stream_status_code(error: dict[str, Any]) -> int:
     for key in ("status_code", "status", "code"):
         value = _int(error.get(key))
         if value is not None:
@@ -95,6 +93,8 @@ def _int(value: Any) -> Optional[int]:
         return None
     if isinstance(value, int):
         return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
     if isinstance(value, str):
         try:
             return int(value)
