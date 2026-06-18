@@ -235,6 +235,74 @@ def test_error_normalization_and_retries() -> None:
     assert exc_info.value.request_id == "req_1"
 
 
+def test_streaming_http_errors_are_normalized() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/chat/completions"
+        return httpx.Response(
+            401,
+            json={
+                "error": {
+                    "message": "Invalid API key",
+                    "metadata": {
+                        "type": "authentication_error",
+                        "router_code": "ROUTER_AUTH_FAILED",
+                        "request_id": "req_stream",
+                    },
+                }
+            },
+        )
+
+    client = GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(GlobalRouterError) as exc_info:
+            list(client.chat.stream(model="mock-chat", messages=[]))
+    finally:
+        client.close()
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.code == "ROUTER_AUTH_FAILED"
+    assert exc_info.value.message == "Invalid API key"
+    assert exc_info.value.error_type == "authentication_error"
+    assert exc_info.value.request_id == "req_stream"
+
+
+@pytest.mark.asyncio
+async def test_async_streaming_http_errors_are_normalized() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/chat/completions"
+        return httpx.Response(
+            401,
+            json={
+                "error": {
+                    "message": "Invalid API key",
+                    "metadata": {
+                        "type": "authentication_error",
+                        "router_code": "ROUTER_AUTH_FAILED",
+                        "request_id": "req_async_stream",
+                    },
+                }
+            },
+        )
+
+    async with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(GlobalRouterError) as exc_info:
+            [item async for item in client.chat.stream_async(model="mock-chat", messages=[])]
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.code == "ROUTER_AUTH_FAILED"
+    assert exc_info.value.message == "Invalid API key"
+    assert exc_info.value.error_type == "authentication_error"
+    assert exc_info.value.request_id == "req_async_stream"
+
+
 def test_webhook_signature_verification() -> None:
     payload = b'{"event":"task.succeeded"}'
     legacy = "sha256=0f2d86d81b7a8c4d936d190496d299da981be5857b083120430ea9b01e6d99f7"
