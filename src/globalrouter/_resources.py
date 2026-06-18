@@ -19,16 +19,30 @@ from globalrouter._streaming import aiter_sse_models, iter_sse_models
 if TYPE_CHECKING:
     from globalrouter._client import GlobalRouter
 
+_TRANSPORT_ONLY_KEYS = frozenset({"idempotency_key"})
+
 
 class BaseResource:
     def __init__(self, client: "GlobalRouter") -> None:
         self._client = client
 
-    def _payload(self, request: Optional[Mapping[str, Any]], params: dict[str, Any]) -> JSONDict:
+    def _payload(
+        self,
+        request: Optional[Mapping[str, Any]],
+        params: dict[str, Any],
+        *,
+        exclude_keys: frozenset[str] = frozenset(),
+    ) -> JSONDict:
         payload: JSONDict = {}
         if request is not None:
-            payload.update(dict(request))
-        payload.update({key: value for key, value in params.items() if value is not None})
+            payload.update({key: value for key, value in request.items() if key not in exclude_keys})
+        payload.update(
+            {
+                key: value
+                for key, value in params.items()
+                if value is not None and key not in exclude_keys
+            }
+        )
         return payload
 
 
@@ -332,7 +346,7 @@ class VideosResource(BaseResource):
             "POST",
             "/api/v1/videos",
             VideoJob,
-            json_body=self._payload(request, params),
+            json_body=self._payload(request, params, exclude_keys=_TRANSPORT_ONLY_KEYS),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -345,7 +359,7 @@ class VideosResource(BaseResource):
             "POST",
             "/api/v1/videos",
             VideoJob,
-            json_body=self._payload(request, params),
+            json_body=self._payload(request, params, exclude_keys=_TRANSPORT_ONLY_KEYS),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -382,7 +396,7 @@ class TasksResource(BaseResource):
             "POST",
             "/v1/tasks",
             Task,
-            json_body=self._payload(request, params),
+            json_body=self._payload(request, params, exclude_keys=_TRANSPORT_ONLY_KEYS),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -395,7 +409,7 @@ class TasksResource(BaseResource):
             "POST",
             "/v1/tasks",
             Task,
-            json_body=self._payload(request, params),
+            json_body=self._payload(request, params, exclude_keys=_TRANSPORT_ONLY_KEYS),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
