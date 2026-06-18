@@ -328,11 +328,12 @@ class ProvidersResource(BaseResource):
 
 class VideosResource(BaseResource):
     def create(self, request: Optional[Mapping[str, Any]] = None, **params: Any) -> VideoJob:
+        body_params = _without_idempotency_key(params)
         return self._client.request_model(
             "POST",
             "/api/v1/videos",
             VideoJob,
-            json_body=self._payload(request, params),
+            json_body=self._payload(request, body_params),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -341,11 +342,12 @@ class VideosResource(BaseResource):
         request: Optional[Mapping[str, Any]] = None,
         **params: Any,
     ) -> VideoJob:
+        body_params = _without_idempotency_key(params)
         return await self._client.request_model_async(
             "POST",
             "/api/v1/videos",
             VideoJob,
-            json_body=self._payload(request, params),
+            json_body=self._payload(request, body_params),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -378,11 +380,12 @@ class VideosResource(BaseResource):
 
 class TasksResource(BaseResource):
     def create(self, request: Optional[Mapping[str, Any]] = None, **params: Any) -> Task:
+        body_params = _without_idempotency_key(params)
         return self._client.request_model(
             "POST",
             "/v1/tasks",
             Task,
-            json_body=self._payload(request, params),
+            json_body=self._payload(request, body_params),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -391,11 +394,12 @@ class TasksResource(BaseResource):
         request: Optional[Mapping[str, Any]] = None,
         **params: Any,
     ) -> Task:
+        body_params = _without_idempotency_key(params)
         return await self._client.request_model_async(
             "POST",
             "/v1/tasks",
             Task,
-            json_body=self._payload(request, params),
+            json_body=self._payload(request, body_params),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -593,3 +597,7 @@ def _idempotency_header(value: Any) -> Optional[dict[str, str]]:
     if value is None:
         return None
     return {"Idempotency-Key": str(value)}
+
+
+def _without_idempotency_key(params: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in params.items() if key != "idempotency_key"}
