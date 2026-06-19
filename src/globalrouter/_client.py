@@ -76,9 +76,19 @@ class GlobalRouter:
 
     def close(self) -> None:
         self._client.close()
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(self._async_client.aclose())
+            else:
+                loop.run_until_complete(self._async_client.aclose())
+        except RuntimeError:
+            pass
 
     async def aclose(self) -> None:
         await self._async_client.aclose()
+        self._client.close()
 
     def __enter__(self) -> "GlobalRouter":
         return self
