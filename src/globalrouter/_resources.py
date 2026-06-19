@@ -24,11 +24,20 @@ class BaseResource:
     def __init__(self, client: "GlobalRouter") -> None:
         self._client = client
 
-    def _payload(self, request: Optional[Mapping[str, Any]], params: dict[str, Any]) -> JSONDict:
+    def _payload(
+        self,
+        request: Optional[Mapping[str, Any]],
+        params: dict[str, Any],
+        *,
+        exclude: tuple[str, ...] = (),
+    ) -> JSONDict:
         payload: JSONDict = {}
         if request is not None:
             payload.update(dict(request))
-        payload.update({key: value for key, value in params.items() if value is not None})
+        excluded = set(exclude)
+        payload.update(
+            {key: value for key, value in params.items() if value is not None and key not in excluded}
+        )
         return payload
 
 
@@ -332,7 +341,7 @@ class VideosResource(BaseResource):
             "POST",
             "/api/v1/videos",
             VideoJob,
-            json_body=self._payload(request, params),
+            json_body=self._payload(request, params, exclude=("idempotency_key",)),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -345,7 +354,7 @@ class VideosResource(BaseResource):
             "POST",
             "/api/v1/videos",
             VideoJob,
-            json_body=self._payload(request, params),
+            json_body=self._payload(request, params, exclude=("idempotency_key",)),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -382,7 +391,7 @@ class TasksResource(BaseResource):
             "POST",
             "/v1/tasks",
             Task,
-            json_body=self._payload(request, params),
+            json_body=self._payload(request, params, exclude=("idempotency_key",)),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -395,7 +404,7 @@ class TasksResource(BaseResource):
             "POST",
             "/v1/tasks",
             Task,
-            json_body=self._payload(request, params),
+            json_body=self._payload(request, params, exclude=("idempotency_key",)),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
