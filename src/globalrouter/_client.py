@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import os
+from threading import Thread
 from time import sleep
 from typing import Any, Optional, TypeVar, cast
 
@@ -76,8 +78,11 @@ class GlobalRouter:
 
     def close(self) -> None:
         self._client.close()
+        if not self._async_client.is_closed:
+            _run_async_client_close(self._async_client)
 
     async def aclose(self) -> None:
+        self._client.close()
         await self._async_client.aclose()
 
     def __enter__(self) -> "GlobalRouter":
@@ -275,6 +280,28 @@ def _clean(params: Optional[dict[str, Any]]) -> Optional[dict[str, str]]:
 
 def _ensure_error_type(_: GlobalRouterError) -> None:
     return None
+
+
+def _run_async_client_close(client: httpx.AsyncClient) -> None:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(client.aclose())
+        return
+
+    error: list[BaseException] = []
+
+    def close_client() -> None:
+        try:
+            asyncio.run(client.aclose())
+        except BaseException as exc:
+            error.append(exc)
+
+    thread = Thread(target=close_client)
+    thread.start()
+    thread.join()
+    if error:
+        raise error[0]
 
 
 def _cast_json_dict(value: Any) -> JSONDict:
