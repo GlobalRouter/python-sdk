@@ -168,6 +168,15 @@ def test_native_surface_and_sse_streaming() -> None:
         client.close()
 
 
+def test_close_closes_sync_and_async_clients() -> None:
+    client = GlobalRouter(api_key="sk-test-local")
+
+    client.close()
+
+    assert client._client.is_closed is True
+    assert client._async_client.is_closed is True
+
+
 @pytest.mark.asyncio
 async def test_async_chat_and_models() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -192,6 +201,16 @@ async def test_async_chat_and_models() -> None:
     ) as client:
         assert (await client.chat.send_async(model="mock-chat", messages=[])).id == "chat_async"
         assert (await client.models.list_async()).data[0]["id"] == "mock-chat"
+
+
+@pytest.mark.asyncio
+async def test_aclose_closes_sync_and_async_clients() -> None:
+    client = GlobalRouter(api_key="sk-test-local")
+
+    await client.aclose()
+
+    assert client._client.is_closed is True
+    assert client._async_client.is_closed is True
 
 
 def test_error_normalization_and_retries() -> None:
