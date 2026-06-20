@@ -332,7 +332,7 @@ class VideosResource(BaseResource):
             "POST",
             "/api/v1/videos",
             VideoJob,
-            json_body=self._payload(request, params),
+            json_body=self._payload(request, _without_idempotency_key(params)),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -345,7 +345,7 @@ class VideosResource(BaseResource):
             "POST",
             "/api/v1/videos",
             VideoJob,
-            json_body=self._payload(request, params),
+            json_body=self._payload(request, _without_idempotency_key(params)),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -382,7 +382,7 @@ class TasksResource(BaseResource):
             "POST",
             "/v1/tasks",
             Task,
-            json_body=self._payload(request, params),
+            json_body=self._payload(request, _without_idempotency_key(params)),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -395,7 +395,7 @@ class TasksResource(BaseResource):
             "POST",
             "/v1/tasks",
             Task,
-            json_body=self._payload(request, params),
+            json_body=self._payload(request, _without_idempotency_key(params)),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -586,6 +586,12 @@ def _task_params(params: dict[str, Any]) -> dict[str, Any]:
         result["metadata.project_id"] = result.pop("metadata_project_id")
     if "task_type" in result:
         result["type"] = result.pop("task_type")
+    return result
+
+
+def _without_idempotency_key(params: dict[str, Any]) -> dict[str, Any]:
+    result = dict(params)
+    result.pop("idempotency_key", None)
     return result
 
 
