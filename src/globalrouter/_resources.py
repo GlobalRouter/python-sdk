@@ -328,12 +328,13 @@ class ProvidersResource(BaseResource):
 
 class VideosResource(BaseResource):
     def create(self, request: Optional[Mapping[str, Any]] = None, **params: Any) -> VideoJob:
+        idempotency_key = params.pop("idempotency_key", None)
         return self._client.request_model(
             "POST",
             "/api/v1/videos",
             VideoJob,
             json_body=self._payload(request, params),
-            headers=_idempotency_header(params.get("idempotency_key")),
+            headers=_idempotency_header(idempotency_key),
         )
 
     async def create_async(
@@ -341,12 +342,13 @@ class VideosResource(BaseResource):
         request: Optional[Mapping[str, Any]] = None,
         **params: Any,
     ) -> VideoJob:
+        idempotency_key = params.pop("idempotency_key", None)
         return await self._client.request_model_async(
             "POST",
             "/api/v1/videos",
             VideoJob,
             json_body=self._payload(request, params),
-            headers=_idempotency_header(params.get("idempotency_key")),
+            headers=_idempotency_header(idempotency_key),
         )
 
     def get(self, job_id: str) -> VideoJob:
@@ -378,12 +380,13 @@ class VideosResource(BaseResource):
 
 class TasksResource(BaseResource):
     def create(self, request: Optional[Mapping[str, Any]] = None, **params: Any) -> Task:
+        idempotency_key = params.pop("idempotency_key", None)
         return self._client.request_model(
             "POST",
             "/v1/tasks",
             Task,
             json_body=self._payload(request, params),
-            headers=_idempotency_header(params.get("idempotency_key")),
+            headers=_idempotency_header(idempotency_key),
         )
 
     async def create_async(
@@ -391,12 +394,13 @@ class TasksResource(BaseResource):
         request: Optional[Mapping[str, Any]] = None,
         **params: Any,
     ) -> Task:
+        idempotency_key = params.pop("idempotency_key", None)
         return await self._client.request_model_async(
             "POST",
             "/v1/tasks",
             Task,
             json_body=self._payload(request, params),
-            headers=_idempotency_header(params.get("idempotency_key")),
+            headers=_idempotency_header(idempotency_key),
         )
 
     def create_batch(self, tasks: list[Mapping[str, Any]]) -> APIResponse:
