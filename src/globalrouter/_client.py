@@ -25,6 +25,7 @@ from globalrouter._resources import (
     ThreeDResource,
     VideosResource,
 )
+from globalrouter._webhooks import DEFAULT_WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS
 from globalrouter._webhooks import verify_webhook_signature
 
 T = TypeVar("T", bound=BaseModel)
@@ -93,8 +94,19 @@ class GlobalRouter:
         await self.aclose()
 
     @staticmethod
-    def verify_webhook_signature(secret: str, payload: bytes, signature: str) -> bool:
-        return verify_webhook_signature(secret, payload, signature)
+    def verify_webhook_signature(
+        secret: str,
+        payload: bytes,
+        signature: str,
+        *,
+        timestamp_tolerance_seconds: int | None = DEFAULT_WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS,
+    ) -> bool:
+        return verify_webhook_signature(
+            secret,
+            payload,
+            signature,
+            timestamp_tolerance_seconds=timestamp_tolerance_seconds,
+        )
 
     def request_model(
         self,
