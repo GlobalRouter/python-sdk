@@ -235,6 +235,41 @@ def test_error_normalization_and_retries() -> None:
     assert exc_info.value.request_id == "req_1"
 
 
+def test_stream_error_with_non_numeric_code_raises_globalrouter_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/chat/completions"
+        return httpx.Response(
+            200,
+            content=_sse_lines(
+                [
+                    {
+                        "error": {
+                            "message": "provider failed",
+                            "code": "PROVIDER_ERROR",
+                            "metadata": {"type": "provider_error", "request_id": "req_stream"},
+                        }
+                    }
+                ]
+            ),
+        )
+
+    client = GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(GlobalRouterError) as exc_info:
+            list(client.chat.stream(model="mock-chat", messages=[]))
+    finally:
+        client.close()
+
+    assert exc_info.value.status_code == 0
+    assert exc_info.value.code == "PROVIDER_ERROR"
+    assert exc_info.value.error_type == "provider_error"
+    assert exc_info.value.request_id == "req_stream"
+
+
 def test_webhook_signature_verification() -> None:
     payload = b'{"event":"task.succeeded"}'
     legacy = "sha256=0f2d86d81b7a8c4d936d190496d299da981be5857b083120430ea9b01e6d99f7"
