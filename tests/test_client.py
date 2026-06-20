@@ -60,6 +60,10 @@ def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatc
             return httpx.Response(200, json={"data": [{"id": "doubao"}]})
         if request.url.path == "/api/v1/videos":
             assert request.headers["idempotency-key"] == "idem_1"
+            assert json.loads(request.content) == {
+                "model": "seedance-video",
+                "prompt": "demo",
+            }
             return httpx.Response(
                 202,
                 json={"id": "task_video", "object": "video.generation", "status": "queued"},
@@ -118,6 +122,11 @@ def test_native_surface_and_sse_streaming() -> None:
             assert request.url.params.get("metadata.project_id") == "project_1"
             return httpx.Response(200, json={"id": "task_1", "status": "queued"})
         if request.url.path == "/v1/tasks":
+            assert request.headers["idempotency-key"] == "idem_task"
+            assert json.loads(request.content) == {
+                "type": "image_generation",
+                "model": "seedream-image",
+            }
             return httpx.Response(200, json={"id": "task_1", "status": "queued"})
         if request.url.path == "/v1/tasks/batch":
             return httpx.Response(200, json={"data": [{"id": "task_1"}]})
@@ -152,7 +161,14 @@ def test_native_surface_and_sse_streaming() -> None:
     )
     try:
         assert list(client.chat.stream(model="mock-chat", messages=[]))[0].id == "chunk_1"
-        assert client.tasks.create(type="image_generation", model="seedream-image").id == "task_1"
+        assert (
+            client.tasks.create(
+                type="image_generation",
+                model="seedream-image",
+                idempotency_key="idem_task",
+            ).id
+            == "task_1"
+        )
         assert client.tasks.create_batch([{"type": "image_generation"}]).data[0]["id"] == "task_1"
         assert client.tasks.get_batch("batch_1").data[0]["id"] == "task_1"
         assert client.tasks.list(metadata_project_id="project_1").id == "task_1"
