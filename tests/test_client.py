@@ -101,6 +101,14 @@ def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatc
     assert all(request.headers["authorization"] == "Bearer sk-test-local" for request in requests)
 
 
+def test_sync_context_manager_closes_both_clients() -> None:
+    with GlobalRouter(api_key="sk-test-local", base_url="http://testserver") as client:
+        pass
+
+    assert client._client.is_closed is True
+    assert client._async_client.is_closed is True
+
+
 def test_native_surface_and_sse_streaming() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/api/v1/chat/completions":
@@ -192,6 +200,9 @@ async def test_async_chat_and_models() -> None:
     ) as client:
         assert (await client.chat.send_async(model="mock-chat", messages=[])).id == "chat_async"
         assert (await client.models.list_async()).data[0]["id"] == "mock-chat"
+
+    assert client._client.is_closed is True
+    assert client._async_client.is_closed is True
 
 
 def test_error_normalization_and_retries() -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from time import sleep
 from typing import Any, Optional, TypeVar, cast
@@ -76,8 +77,11 @@ class GlobalRouter:
 
     def close(self) -> None:
         self._client.close()
+        if not self._async_client.is_closed:
+            asyncio.run(self._async_client.aclose())
 
     async def aclose(self) -> None:
+        self._client.close()
         await self._async_client.aclose()
 
     def __enter__(self) -> "GlobalRouter":
