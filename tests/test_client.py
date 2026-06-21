@@ -168,6 +168,53 @@ def test_native_surface_and_sse_streaming() -> None:
         client.close()
 
 
+def test_streaming_http_error_is_read_before_normalization() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/chat/completions"
+        assert json.loads(request.content)["stream"] is True
+        return _streaming_rate_limit_error_response()
+
+    client = GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(GlobalRouterError) as exc_info:
+            list(client.chat.stream(model="mock-chat", messages=[]))
+    finally:
+        client.close()
+
+    assert exc_info.value.status_code == 429
+    assert exc_info.value.message == "Too many requests"
+    assert exc_info.value.code == "ROUTER_RATE_LIMITED"
+    assert exc_info.value.error_type == "rate_limit_error"
+    assert exc_info.value.request_id == "req_stream"
+
+
+@pytest.mark.asyncio
+async def test_async_streaming_http_error_is_read_before_normalization() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/chat/completions"
+        assert json.loads(request.content)["stream"] is True
+        return _streaming_rate_limit_error_response()
+
+    async with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(GlobalRouterError) as exc_info:
+            async for _ in client.chat.stream_async(model="mock-chat", messages=[]):
+                pass
+
+    assert exc_info.value.status_code == 429
+    assert exc_info.value.message == "Too many requests"
+    assert exc_info.value.code == "ROUTER_RATE_LIMITED"
+    assert exc_info.value.error_type == "rate_limit_error"
+    assert exc_info.value.request_id == "req_stream"
+
+
 @pytest.mark.asyncio
 async def test_async_chat_and_models() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -250,3 +297,24 @@ def _sse_lines(items: list[dict[str, Any] | str]) -> Iterator[bytes]:
     for item in items:
         payload = item if isinstance(item, str) else json.dumps(item)
         yield f"data: {payload}\n\n".encode()
+
+
+def _streaming_rate_limit_error_response() -> httpx.Response:
+    return httpx.Response(
+        429,
+        headers={"content-type": "application/json"},
+        stream=httpx.ByteStream(
+            json.dumps(
+                {
+                    "error": {
+                        "message": "Too many requests",
+                        "metadata": {
+                            "type": "rate_limit_error",
+                            "router_code": "ROUTER_RATE_LIMITED",
+                            "request_id": "req_stream",
+                        },
+                    }
+                }
+            ).encode()
+        ),
+    )
