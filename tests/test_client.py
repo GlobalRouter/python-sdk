@@ -168,6 +168,50 @@ def test_native_surface_and_sse_streaming() -> None:
         client.close()
 
 
+def test_create_idempotency_key_is_header_only() -> None:
+    bodies: dict[str, dict[str, Any]] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        bodies[request.url.path] = body
+        assert "idempotency_key" not in body
+        if request.url.path == "/api/v1/videos":
+            assert request.headers["idempotency-key"] == "idem_video"
+            return httpx.Response(202, json={"id": "video_1", "status": "queued"})
+        if request.url.path == "/v1/tasks":
+            assert request.headers["idempotency-key"] == "idem_task"
+            return httpx.Response(200, json={"id": "task_1", "status": "queued"})
+        return httpx.Response(404)
+
+    client = GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        assert (
+            client.videos.create(
+                model="seedance-video",
+                prompt="demo",
+                idempotency_key="idem_video",
+            ).id
+            == "video_1"
+        )
+        assert (
+            client.tasks.create(
+                type="image_generation",
+                model="seedream-image",
+                idempotency_key="idem_task",
+            ).id
+            == "task_1"
+        )
+    finally:
+        client.close()
+
+    assert bodies["/api/v1/videos"]["model"] == "seedance-video"
+    assert bodies["/v1/tasks"]["type"] == "image_generation"
+
+
 @pytest.mark.asyncio
 async def test_async_chat_and_models() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -192,6 +236,46 @@ async def test_async_chat_and_models() -> None:
     ) as client:
         assert (await client.chat.send_async(model="mock-chat", messages=[])).id == "chat_async"
         assert (await client.models.list_async()).data[0]["id"] == "mock-chat"
+
+
+@pytest.mark.asyncio
+async def test_create_async_idempotency_key_is_header_only() -> None:
+    bodies: dict[str, dict[str, Any]] = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        bodies[request.url.path] = body
+        assert "idempotency_key" not in body
+        if request.url.path == "/api/v1/videos":
+            assert request.headers["idempotency-key"] == "idem_video_async"
+            return httpx.Response(202, json={"id": "video_async", "status": "queued"})
+        if request.url.path == "/v1/tasks":
+            assert request.headers["idempotency-key"] == "idem_task_async"
+            return httpx.Response(200, json={"id": "task_async", "status": "queued"})
+        return httpx.Response(404)
+
+    async with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        assert (
+            await client.videos.create_async(
+                model="seedance-video",
+                prompt="demo",
+                idempotency_key="idem_video_async",
+            )
+        ).id == "video_async"
+        assert (
+            await client.tasks.create_async(
+                type="image_generation",
+                model="seedream-image",
+                idempotency_key="idem_task_async",
+            )
+        ).id == "task_async"
+
+    assert bodies["/api/v1/videos"]["prompt"] == "demo"
+    assert bodies["/v1/tasks"]["model"] == "seedream-image"
 
 
 def test_error_normalization_and_retries() -> None:
