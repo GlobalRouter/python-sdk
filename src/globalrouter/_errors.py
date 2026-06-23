@@ -62,17 +62,37 @@ def error_from_response(response: httpx.Response) -> GlobalRouterError:
 
 def error_from_stream_payload(payload: dict[str, Any]) -> GlobalRouterError:
     error = payload.get("error", {})
-    metadata = error.get("metadata", {}) if isinstance(error, dict) else {}
+    if not isinstance(error, dict):
+        error = {}
+    metadata = error.get("metadata", {})
     if not isinstance(metadata, dict):
         metadata = {}
+    error_code = error.get("code")
     return GlobalRouterError(
-        status_code=int(error.get("code") or 0) if isinstance(error, dict) else 0,
-        code=_string(metadata.get("router_code")) or "GLOBALROUTER_STREAM_ERROR",
+        status_code=_status_code_from_stream_code(error_code),
+        code=(
+            _string(metadata.get("router_code"))
+            or _string(error_code)
+            or "GLOBALROUTER_STREAM_ERROR"
+        ),
         message=_string(error.get("message")) or "GlobalRouter stream failed",
-        error_type=_string(metadata.get("type")) or "router_error",
-        request_id=_string(metadata.get("request_id")),
+        error_type=_string(metadata.get("type")) or _string(error.get("type")) or "router_error",
+        request_id=_string(metadata.get("request_id")) or _string(error.get("request_id")),
         response=None,
     )
+
+
+def _status_code_from_stream_code(value: Any) -> int:
+    if value is None or isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return 0
+    return 0
 
 
 def _string(value: Any) -> Optional[str]:
