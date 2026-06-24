@@ -212,6 +212,8 @@ def test_error_normalization_and_retries() -> None:
                         "type": "rate_limit_error",
                         "router_code": "ROUTER_RATE_LIMITED",
                         "request_id": "req_1",
+                        "provider_name": "qwen",
+                        "raw_provider_error": {"code": "upstream_rate_limited"},
                     },
                 }
             },
@@ -233,6 +235,59 @@ def test_error_normalization_and_retries() -> None:
     assert exc_info.value.code == "ROUTER_RATE_LIMITED"
     assert exc_info.value.error_type == "rate_limit_error"
     assert exc_info.value.request_id == "req_1"
+    assert exc_info.value.metadata == {
+        "type": "rate_limit_error",
+        "router_code": "ROUTER_RATE_LIMITED",
+        "request_id": "req_1",
+        "provider_name": "qwen",
+        "raw_provider_error": {"code": "upstream_rate_limited"},
+    }
+
+
+def test_stream_error_preserves_openrouter_metadata() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/chat/completions"
+        return httpx.Response(
+            200,
+            content=_sse_lines(
+                [
+                    {
+                        "error": {
+                            "message": "Stream was rate limited",
+                            "code": 429,
+                            "metadata": {
+                                "type": "rate_limit_error",
+                                "router_code": "ROUTER_RATE_LIMITED",
+                                "request_id": "req_stream",
+                                "provider_name": "qwen",
+                            },
+                        }
+                    }
+                ]
+            ),
+        )
+
+    client = GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(GlobalRouterError) as exc_info:
+            list(client.chat.stream(model="mock-chat", messages=[]))
+    finally:
+        client.close()
+
+    assert exc_info.value.status_code == 429
+    assert exc_info.value.code == "ROUTER_RATE_LIMITED"
+    assert exc_info.value.error_type == "rate_limit_error"
+    assert exc_info.value.request_id == "req_stream"
+    assert exc_info.value.metadata == {
+        "type": "rate_limit_error",
+        "router_code": "ROUTER_RATE_LIMITED",
+        "request_id": "req_stream",
+        "provider_name": "qwen",
+    }
 
 
 def test_webhook_signature_verification() -> None:

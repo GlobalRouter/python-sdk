@@ -112,10 +112,11 @@ from globalrouter import GlobalRouterError
 try:
     client.models.list()
 except GlobalRouterError as exc:
-    print(exc.status_code, exc.code, exc.error_type, exc.request_id)
+    print(exc.status_code, exc.code, exc.error_type, exc.request_id, exc.metadata)
 ```
 
 The SDK normalizes both GlobalRouter native error envelopes and OpenRouter-compatible error envelopes into `GlobalRouterError`.
+For OpenRouter-compatible errors, `exc.metadata` preserves the original `error.metadata` object.
 
 ## Webhook Signatures
 

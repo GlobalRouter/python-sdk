@@ -51,7 +51,7 @@ Both API envelopes normalize into `GlobalRouterError`:
 - Native GlobalRouter: `error.code`, `error.message`, `error.type`, `error.request_id`
 - OpenRouter-compatible: `error.message`, HTTP numeric `error.code`, `error.metadata.router_code`, `error.metadata.type`, `error.metadata.request_id`
 
-`GlobalRouterError` stores `status_code`, `code`, `message`, `error_type`, `request_id`, and the raw `httpx.Response` when available.
+`GlobalRouterError` stores `status_code`, `code`, `message`, `error_type`, `request_id`, the original object-valued `error.metadata`, and the raw `httpx.Response` when available.
 
 ## Streaming
 

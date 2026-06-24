@@ -14,6 +14,7 @@ class GlobalRouterError(Exception):
         message: str,
         error_type: str,
         request_id: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
         response: Optional[httpx.Response] = None,
     ) -> None:
         super().__init__(message)
@@ -22,6 +23,7 @@ class GlobalRouterError(Exception):
         self.message = message
         self.error_type = error_type
         self.request_id = request_id
+        self.metadata = dict(metadata or {})
         self.response = response
 
 
@@ -33,9 +35,7 @@ def error_from_response(response: httpx.Response) -> GlobalRouterError:
         body = {}
 
     error = body.get("error", {}) if isinstance(body, dict) else {}
-    metadata = error.get("metadata", {}) if isinstance(error, dict) else {}
-    if not isinstance(metadata, dict):
-        metadata = {}
+    metadata = _error_metadata(error)
 
     message = _string(error.get("message")) or response.text or "GlobalRouter request failed"
     code = (
@@ -56,23 +56,30 @@ def error_from_response(response: httpx.Response) -> GlobalRouterError:
         message=message,
         error_type=error_type,
         request_id=request_id,
+        metadata=metadata,
         response=response,
     )
 
 
 def error_from_stream_payload(payload: dict[str, Any]) -> GlobalRouterError:
     error = payload.get("error", {})
-    metadata = error.get("metadata", {}) if isinstance(error, dict) else {}
-    if not isinstance(metadata, dict):
-        metadata = {}
+    metadata = _error_metadata(error)
     return GlobalRouterError(
         status_code=int(error.get("code") or 0) if isinstance(error, dict) else 0,
         code=_string(metadata.get("router_code")) or "GLOBALROUTER_STREAM_ERROR",
         message=_string(error.get("message")) or "GlobalRouter stream failed",
         error_type=_string(metadata.get("type")) or "router_error",
         request_id=_string(metadata.get("request_id")),
+        metadata=metadata,
         response=None,
     )
+
+
+def _error_metadata(error: Any) -> dict[str, Any]:
+    metadata = error.get("metadata", {}) if isinstance(error, dict) else {}
+    if not isinstance(metadata, dict):
+        return {}
+    return dict(metadata)
 
 
 def _string(value: Any) -> Optional[str]:
