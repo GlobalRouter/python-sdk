@@ -43,11 +43,7 @@ def error_from_response(response: httpx.Response) -> GlobalRouterError:
         or _string(error.get("code"))
         or "GLOBALROUTER_HTTP_ERROR"
     )
-    error_type = (
-        _string(metadata.get("type"))
-        or _string(error.get("type"))
-        or "router_error"
-    )
+    error_type = _string(metadata.get("type")) or _string(error.get("type")) or "router_error"
     request_id = _string(metadata.get("request_id")) or _string(error.get("request_id"))
 
     return GlobalRouterError(
