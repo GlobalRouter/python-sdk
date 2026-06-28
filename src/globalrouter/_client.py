@@ -215,6 +215,7 @@ class GlobalRouter:
         result = self._client.send(response, stream=True)
         if result.status_code >= 400:
             try:
+                result.read()
                 raise error_from_response(result)
             finally:
                 result.close()
@@ -237,6 +238,7 @@ class GlobalRouter:
         result = await self._async_client.send(request, stream=True)
         if result.status_code >= 400:
             try:
+                await result.aread()
                 raise error_from_response(result)
             finally:
                 await result.aclose()

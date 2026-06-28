@@ -31,6 +31,17 @@ class BaseResource:
         payload.update({key: value for key, value in params.items() if value is not None})
         return payload
 
+    def _payload_without_params(
+        self,
+        request: Optional[Mapping[str, Any]],
+        params: dict[str, Any],
+        excluded: set[str],
+    ) -> JSONDict:
+        return self._payload(
+            request,
+            {key: value for key, value in params.items() if key not in excluded},
+        )
+
 
 class ChatResource(BaseResource):
     def send(self, request: Optional[Mapping[str, Any]] = None, **params: Any) -> ChatCompletion:
@@ -332,7 +343,7 @@ class VideosResource(BaseResource):
             "POST",
             "/api/v1/videos",
             VideoJob,
-            json_body=self._payload(request, params),
+            json_body=self._payload_without_params(request, params, {"idempotency_key"}),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -345,7 +356,7 @@ class VideosResource(BaseResource):
             "POST",
             "/api/v1/videos",
             VideoJob,
-            json_body=self._payload(request, params),
+            json_body=self._payload_without_params(request, params, {"idempotency_key"}),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -382,7 +393,7 @@ class TasksResource(BaseResource):
             "POST",
             "/v1/tasks",
             Task,
-            json_body=self._payload(request, params),
+            json_body=self._payload_without_params(request, params, {"idempotency_key"}),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -395,7 +406,7 @@ class TasksResource(BaseResource):
             "POST",
             "/v1/tasks",
             Task,
-            json_body=self._payload(request, params),
+            json_body=self._payload_without_params(request, params, {"idempotency_key"}),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
