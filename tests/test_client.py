@@ -8,8 +8,14 @@ from typing import Any
 
 import httpx
 import pytest
+from pydantic import BaseModel
 
 from globalrouter import GlobalRouter, GlobalRouterError
+from globalrouter._streaming import aiter_sse_models, iter_sse_models
+
+
+class SSEItem(BaseModel):
+    id: str
 
 
 def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -168,13 +174,42 @@ def test_native_surface_and_sse_streaming() -> None:
         client.close()
 
 
-def test_close_closes_sync_and_async_clients() -> None:
-    client = GlobalRouter(api_key="sk-test-local")
+def test_chat_stream_error_frame_preserves_string_code() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/chat/completions"
+        assert json.loads(request.content)["stream"] is True
+        return httpx.Response(
+            200,
+            content=_sse_lines(
+                [
+                    {
+                        "error": {
+                            "code": "ROUTER_RATE_LIMITED",
+                            "message": "limited",
+                            "type": "rate_limit_error",
+                            "request_id": "req_stream_1",
+                        }
+                    }
+                ]
+            ),
+        )
 
-    client.close()
+    client = GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(GlobalRouterError) as exc_info:
+            list(client.chat.stream(model="mock-chat", messages=[]))
+    finally:
+        client.close()
 
-    assert client._client.is_closed is True
-    assert client._async_client.is_closed is True
+    assert exc_info.value.status_code == 0
+    assert exc_info.value.code == "ROUTER_RATE_LIMITED"
+    assert exc_info.value.message == "limited"
+    assert exc_info.value.error_type == "rate_limit_error"
+    assert exc_info.value.request_id == "req_stream_1"
 
 
 @pytest.mark.asyncio
@@ -263,6 +298,25 @@ def test_webhook_signature_verification() -> None:
     assert GlobalRouter.verify_webhook_signature("secret", payload, legacy) is True
     assert GlobalRouter.verify_webhook_signature("secret", payload, f"t={timestamp},v1={digest}")
     assert GlobalRouter.verify_webhook_signature("secret", payload, "sha256=bad") is False
+
+
+def test_sse_parser_buffers_split_data_fields() -> None:
+    response = httpx.Response(
+        200,
+        content=b'data: {"id": "split"\ndata: }\n\n',
+    )
+
+    assert list(iter_sse_models(response, SSEItem)) == [SSEItem(id="split")]
+
+
+@pytest.mark.asyncio
+async def test_async_sse_parser_buffers_split_data_fields() -> None:
+    response = httpx.Response(
+        200,
+        content=b'data: {"id": "split"\ndata: }\n\n',
+    )
+
+    assert [item async for item in aiter_sse_models(response, SSEItem)] == [SSEItem(id="split")]
 
 
 def _sse_lines(items: list[dict[str, Any] | str]) -> Iterator[bytes]:
