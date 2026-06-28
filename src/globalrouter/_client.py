@@ -220,20 +220,26 @@ class GlobalRouter:
         json_body: Optional[dict[str, Any]] = None,
         headers: Optional[dict[str, str]] = None,
     ) -> httpx.Response:
-        response = self._client.build_request(
-            method,
-            path,
-            headers=self._headers(headers),
-            json=json_body,
-        )
-        result = self._client.send(response, stream=True)
-        if result.status_code >= 400:
-            try:
-                result.read()
-                raise error_from_response(result)
-            finally:
+        for attempt in range(self.max_retries + 1):
+            response = self._client.build_request(
+                method,
+                path,
+                headers=self._headers(headers),
+                json=json_body,
+            )
+            result = self._client.send(response, stream=True)
+            if result.status_code >= 500 and attempt < self.max_retries:
                 result.close()
-        return result
+                self._sleep_before_retry(attempt)
+                continue
+            if result.status_code >= 400:
+                try:
+                    result.read()
+                    raise error_from_response(result)
+                finally:
+                    result.close()
+            return result
+        raise RuntimeError("GlobalRouter SDK stream request exhausted retries")
 
     async def stream_async(
         self,
@@ -243,20 +249,26 @@ class GlobalRouter:
         json_body: Optional[dict[str, Any]] = None,
         headers: Optional[dict[str, str]] = None,
     ) -> httpx.Response:
-        request = self._async_client.build_request(
-            method,
-            path,
-            headers=self._headers(headers),
-            json=json_body,
-        )
-        result = await self._async_client.send(request, stream=True)
-        if result.status_code >= 400:
-            try:
-                await result.aread()
-                raise error_from_response(result)
-            finally:
+        for attempt in range(self.max_retries + 1):
+            request = self._async_client.build_request(
+                method,
+                path,
+                headers=self._headers(headers),
+                json=json_body,
+            )
+            result = await self._async_client.send(request, stream=True)
+            if result.status_code >= 500 and attempt < self.max_retries:
                 await result.aclose()
-        return result
+                await self._async_sleep_before_retry(attempt)
+                continue
+            if result.status_code >= 400:
+                try:
+                    await result.aread()
+                    raise error_from_response(result)
+                finally:
+                    await result.aclose()
+            return result
+        raise RuntimeError("GlobalRouter SDK async stream request exhausted retries")
 
     def _headers(self, extra: Optional[dict[str, str]] = None) -> dict[str, str]:
         headers = {
