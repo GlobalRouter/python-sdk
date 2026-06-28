@@ -298,11 +298,12 @@ def test_error_normalization_and_retries() -> None:
     assert exc_info.value.request_id == "req_1"
 
 
-def test_webhook_signature_verification() -> None:
+def test_webhook_signature_verification(monkeypatch: pytest.MonkeyPatch) -> None:
     payload = b'{"event":"task.succeeded"}'
     legacy = "sha256=0f2d86d81b7a8c4d936d190496d299da981be5857b083120430ea9b01e6d99f7"
     timestamp = "1778413678"
     digest = hmac_new(b"secret", timestamp.encode() + b"." + payload, sha256).hexdigest()
+    monkeypatch.setattr("globalrouter._webhooks.time.time", lambda: int(timestamp) + 60)
 
     assert GlobalRouter.verify_webhook_signature("secret", payload, legacy) is True
     assert GlobalRouter.verify_webhook_signature("secret", payload, f"t={timestamp},v1={digest}")
