@@ -272,7 +272,11 @@ def payload_from_mapping(request: Optional[dict[str, Any]], params: dict[str, An
 def _clean(params: Optional[dict[str, Any]]) -> Optional[dict[str, str]]:
     if params is None:
         return None
-    return {key: str(value) for key, value in params.items() if value is not None}
+    return {
+        key: ("true" if value else "false") if isinstance(value, bool) else str(value)
+        for key, value in params.items()
+        if value is not None
+    }
 
 
 def _ensure_error_type(_: GlobalRouterError) -> None:
