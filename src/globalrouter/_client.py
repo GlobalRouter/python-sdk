@@ -25,8 +25,10 @@ from globalrouter._resources import (
     ThreeDResource,
     VideosResource,
 )
-from globalrouter._webhooks import DEFAULT_WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS
-from globalrouter._webhooks import verify_webhook_signature
+from globalrouter._webhooks import (
+    DEFAULT_WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS,
+    verify_webhook_signature,
+)
 
 T = TypeVar("T", bound=BaseModel)
 
