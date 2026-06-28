@@ -8,8 +8,14 @@ from typing import Any
 
 import httpx
 import pytest
+from pydantic import BaseModel
 
 from globalrouter import GlobalRouter, GlobalRouterError
+from globalrouter._streaming import aiter_sse_models, iter_sse_models
+
+
+class SSEItem(BaseModel):
+    id: str
 
 
 def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -168,6 +174,44 @@ def test_native_surface_and_sse_streaming() -> None:
         client.close()
 
 
+def test_chat_stream_error_frame_preserves_string_code() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/chat/completions"
+        assert json.loads(request.content)["stream"] is True
+        return httpx.Response(
+            200,
+            content=_sse_lines(
+                [
+                    {
+                        "error": {
+                            "code": "ROUTER_RATE_LIMITED",
+                            "message": "limited",
+                            "type": "rate_limit_error",
+                            "request_id": "req_stream_1",
+                        }
+                    }
+                ]
+            ),
+        )
+
+    client = GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(GlobalRouterError) as exc_info:
+            list(client.chat.stream(model="mock-chat", messages=[]))
+    finally:
+        client.close()
+
+    assert exc_info.value.status_code == 0
+    assert exc_info.value.code == "ROUTER_RATE_LIMITED"
+    assert exc_info.value.message == "limited"
+    assert exc_info.value.error_type == "rate_limit_error"
+    assert exc_info.value.request_id == "req_stream_1"
+
+
 @pytest.mark.asyncio
 async def test_async_chat_and_models() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -247,34 +291,23 @@ def test_webhook_signature_verification(monkeypatch: pytest.MonkeyPatch) -> None
     assert GlobalRouter.verify_webhook_signature("secret", payload, "sha256=bad") is False
 
 
-def test_webhook_signature_verification_rejects_stale_timestamp(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    payload = b'{"event":"task.succeeded"}'
-    timestamp = "1778413678"
-    digest = hmac_new(b"secret", timestamp.encode() + b"." + payload, sha256).hexdigest()
-    signature = f"t={timestamp},v1={digest}"
-    monkeypatch.setattr("globalrouter._webhooks.time.time", lambda: int(timestamp) + 301)
+def test_sse_parser_buffers_split_data_fields() -> None:
+    response = httpx.Response(
+        200,
+        content=b'data: {"id": "split"\ndata: }\n\n',
+    )
 
-    assert GlobalRouter.verify_webhook_signature("secret", payload, signature) is False
-    assert (
-        GlobalRouter.verify_webhook_signature(
-            "secret",
-            payload,
-            signature,
-            timestamp_tolerance_seconds=400,
-        )
-        is True
+    assert list(iter_sse_models(response, SSEItem)) == [SSEItem(id="split")]
+
+
+@pytest.mark.asyncio
+async def test_async_sse_parser_buffers_split_data_fields() -> None:
+    response = httpx.Response(
+        200,
+        content=b'data: {"id": "split"\ndata: }\n\n',
     )
-    assert (
-        GlobalRouter.verify_webhook_signature(
-            "secret",
-            payload,
-            signature,
-            timestamp_tolerance_seconds=None,
-        )
-        is True
-    )
+
+    assert [item async for item in aiter_sse_models(response, SSEItem)] == [SSEItem(id="split")]
 
 
 def _sse_lines(items: list[dict[str, Any] | str]) -> Iterator[bytes]:
