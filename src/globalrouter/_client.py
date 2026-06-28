@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import os
+import threading
 from time import sleep
 from typing import Any, Optional, TypeVar, cast
 
@@ -79,8 +81,10 @@ class GlobalRouter:
 
     def close(self) -> None:
         self._client.close()
+        _close_async_client(self._async_client)
 
     async def aclose(self) -> None:
+        self._client.close()
         await self._async_client.aclose()
 
     def __enter__(self) -> "GlobalRouter":
@@ -225,6 +229,7 @@ class GlobalRouter:
         result = self._client.send(response, stream=True)
         if result.status_code >= 400:
             try:
+                result.read()
                 raise error_from_response(result)
             finally:
                 result.close()
@@ -247,6 +252,7 @@ class GlobalRouter:
         result = await self._async_client.send(request, stream=True)
         if result.status_code >= 400:
             try:
+                await result.aread()
                 raise error_from_response(result)
             finally:
                 await result.aclose()
@@ -297,3 +303,28 @@ def _ensure_error_type(_: GlobalRouterError) -> None:
 
 def _cast_json_dict(value: Any) -> JSONDict:
     return cast(JSONDict, value)
+
+
+def _close_async_client(client: httpx.AsyncClient) -> None:
+    if client.is_closed:
+        return
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(client.aclose())
+        return
+
+    error: Optional[BaseException] = None
+
+    def close_in_thread() -> None:
+        nonlocal error
+        try:
+            asyncio.run(client.aclose())
+        except BaseException as exc:
+            error = exc
+
+    thread = threading.Thread(target=close_in_thread)
+    thread.start()
+    thread.join()
+    if error is not None:
+        raise error

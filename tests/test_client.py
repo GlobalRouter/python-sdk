@@ -238,6 +238,25 @@ async def test_async_chat_and_models() -> None:
         assert (await client.models.list_async()).data[0]["id"] == "mock-chat"
 
 
+@pytest.mark.asyncio
+async def test_async_streaming_error_normalization() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return _streaming_error_response()
+
+    async with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(GlobalRouterError) as exc_info:
+            [item async for item in client.chat.stream_async(model="mock-chat", messages=[])]
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.message == "Unauthorized"
+    assert exc_info.value.code == "AUTH_REQUIRED"
+    assert exc_info.value.request_id == "req_stream_1"
+
+
 def test_error_normalization_and_retries() -> None:
     attempts = 0
 
@@ -314,3 +333,24 @@ def _sse_lines(items: list[dict[str, Any] | str]) -> Iterator[bytes]:
     for item in items:
         payload = item if isinstance(item, str) else json.dumps(item)
         yield f"data: {payload}\n\n".encode()
+
+
+def _streaming_error_response() -> httpx.Response:
+    return httpx.Response(
+        401,
+        stream=httpx.ByteStream(
+            json.dumps(
+                {
+                    "error": {
+                        "message": "Unauthorized",
+                        "code": "unauthorized",
+                        "metadata": {
+                            "type": "authentication_error",
+                            "router_code": "AUTH_REQUIRED",
+                            "request_id": "req_stream_1",
+                        },
+                    }
+                }
+            ).encode()
+        ),
+    )
