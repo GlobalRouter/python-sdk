@@ -8,8 +8,14 @@ from typing import Any
 
 import httpx
 import pytest
+from pydantic import BaseModel
 
 from globalrouter import GlobalRouter, GlobalRouterError
+from globalrouter._streaming import aiter_sse_models, iter_sse_models
+
+
+class SSEItem(BaseModel):
+    id: str
 
 
 def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -282,6 +288,25 @@ def test_webhook_signature_verification() -> None:
     assert GlobalRouter.verify_webhook_signature("secret", payload, legacy) is True
     assert GlobalRouter.verify_webhook_signature("secret", payload, f"t={timestamp},v1={digest}")
     assert GlobalRouter.verify_webhook_signature("secret", payload, "sha256=bad") is False
+
+
+def test_sse_parser_buffers_split_data_fields() -> None:
+    response = httpx.Response(
+        200,
+        content=b'data: {"id": "split"\ndata: }\n\n',
+    )
+
+    assert list(iter_sse_models(response, SSEItem)) == [SSEItem(id="split")]
+
+
+@pytest.mark.asyncio
+async def test_async_sse_parser_buffers_split_data_fields() -> None:
+    response = httpx.Response(
+        200,
+        content=b'data: {"id": "split"\ndata: }\n\n',
+    )
+
+    assert [item async for item in aiter_sse_models(response, SSEItem)] == [SSEItem(id="split")]
 
 
 def _sse_lines(items: list[dict[str, Any] | str]) -> Iterator[bytes]:
