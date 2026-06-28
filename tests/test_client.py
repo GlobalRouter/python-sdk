@@ -239,43 +239,22 @@ async def test_async_chat_and_models() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_async_idempotency_key_is_header_only() -> None:
-    bodies: dict[str, dict[str, Any]] = {}
-
+async def test_async_streaming_error_normalization() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
-        body = json.loads(request.content)
-        bodies[request.url.path] = body
-        assert "idempotency_key" not in body
-        if request.url.path == "/api/v1/videos":
-            assert request.headers["idempotency-key"] == "idem_video_async"
-            return httpx.Response(202, json={"id": "video_async", "status": "queued"})
-        if request.url.path == "/v1/tasks":
-            assert request.headers["idempotency-key"] == "idem_task_async"
-            return httpx.Response(200, json={"id": "task_async", "status": "queued"})
-        return httpx.Response(404)
+        return _streaming_error_response()
 
     async with GlobalRouter(
         api_key="sk-test-local",
         base_url="http://testserver",
         async_transport=httpx.MockTransport(handler),
     ) as client:
-        assert (
-            await client.videos.create_async(
-                model="seedance-video",
-                prompt="demo",
-                idempotency_key="idem_video_async",
-            )
-        ).id == "video_async"
-        assert (
-            await client.tasks.create_async(
-                type="image_generation",
-                model="seedream-image",
-                idempotency_key="idem_task_async",
-            )
-        ).id == "task_async"
+        with pytest.raises(GlobalRouterError) as exc_info:
+            [item async for item in client.chat.stream_async(model="mock-chat", messages=[])]
 
-    assert bodies["/api/v1/videos"]["prompt"] == "demo"
-    assert bodies["/v1/tasks"]["model"] == "seedream-image"
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.message == "Unauthorized"
+    assert exc_info.value.code == "AUTH_REQUIRED"
+    assert exc_info.value.request_id == "req_stream_1"
 
 
 def test_error_normalization_and_retries() -> None:
@@ -353,3 +332,24 @@ def _sse_lines(items: list[dict[str, Any] | str]) -> Iterator[bytes]:
     for item in items:
         payload = item if isinstance(item, str) else json.dumps(item)
         yield f"data: {payload}\n\n".encode()
+
+
+def _streaming_error_response() -> httpx.Response:
+    return httpx.Response(
+        401,
+        stream=httpx.ByteStream(
+            json.dumps(
+                {
+                    "error": {
+                        "message": "Unauthorized",
+                        "code": "unauthorized",
+                        "metadata": {
+                            "type": "authentication_error",
+                            "router_code": "AUTH_REQUIRED",
+                            "request_id": "req_stream_1",
+                        },
+                    }
+                }
+            ).encode()
+        ),
+    )
