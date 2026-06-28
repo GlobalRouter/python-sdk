@@ -329,6 +329,60 @@ async def test_async_sse_parser_buffers_split_data_fields() -> None:
     assert [item async for item in aiter_sse_models(response, SSEItem)] == [SSEItem(id="split")]
 
 
+def test_stream_retries_5xx_before_returning_response() -> None:
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return httpx.Response(500, content=b'{"error":{"message":"temp"}}')
+        return httpx.Response(200, content=b'data: {"id": "retry_ok"}\n\ndata: [DONE]\n\n')
+
+    client = GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        max_retries=1,
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        response = client.stream("POST", "/api/v1/chat/completions", json_body={"stream": True})
+        assert list(iter_sse_models(response, SSEItem)) == [SSEItem(id="retry_ok")]
+    finally:
+        client.close()
+
+    assert attempts == 2
+
+
+@pytest.mark.asyncio
+async def test_async_stream_retries_5xx_before_returning_response() -> None:
+    attempts = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return httpx.Response(500, content=b'{"error":{"message":"temp"}}')
+        return httpx.Response(200, content=b'data: {"id": "retry_ok"}\n\ndata: [DONE]\n\n')
+
+    async with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        max_retries=1,
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        response = await client.stream_async(
+            "POST",
+            "/api/v1/chat/completions",
+            json_body={"stream": True},
+        )
+        assert [item async for item in aiter_sse_models(response, SSEItem)] == [
+            SSEItem(id="retry_ok")
+        ]
+
+    assert attempts == 2
+
+
 def _sse_lines(items: list[dict[str, Any] | str]) -> Iterator[bytes]:
     for item in items:
         payload = item if isinstance(item, str) else json.dumps(item)
