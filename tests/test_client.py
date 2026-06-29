@@ -18,6 +18,13 @@ class SSEItem(BaseModel):
     id: str
 
 
+def test_default_base_url_uses_production_api_domain(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GLOBALROUTER_API_KEY", "sk-test-local")
+
+    with GlobalRouter() as client:
+        assert client.base_url == "https://api.globalrouter.com"
+
+
 def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GLOBALROUTER_API_KEY", "sk-test-local")
     requests: list[httpx.Request] = []

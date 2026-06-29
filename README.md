@@ -96,7 +96,7 @@ async with GlobalRouter() as client:
 ```python
 client = GlobalRouter(
     api_key="sk-...",
-    base_url="https://api.globalrouter.ai",
+    base_url="https://api.globalrouter.com",
     timeout_seconds=30,
     max_retries=2,
 )
