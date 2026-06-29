@@ -40,7 +40,7 @@ class GlobalRouter:
         self,
         *,
         api_key: Optional[str] = None,
-        base_url: str = "https://api.globalrouter.ai",
+        base_url: str = "https://api.globalrouter.com",
         timeout_seconds: float = 30,
         max_retries: int = 2,
         transport: Optional[httpx.BaseTransport] = None,
