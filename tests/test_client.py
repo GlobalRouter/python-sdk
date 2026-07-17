@@ -148,8 +148,20 @@ def test_native_surface_and_sse_streaming() -> None:
             return httpx.Response(200, json={"id": "task_1", "status": "canceled"})
         if request.url.path == "/v1/tasks/task_1/retry":
             return httpx.Response(200, json={"id": "task_1", "status": "queued"})
-        if request.url.path == "/v1/images/generations":
+        if request.url.path == "/api/v1/images":
             return httpx.Response(200, json={"data": [{"url": "https://example.test/i.png"}]})
+        if request.url.path == "/api/v1/image-tasks":
+            assert request.headers["idempotency-key"] == "client-image-task-001"
+            assert "idempotency_key" not in json.loads(request.content)
+            return httpx.Response(
+                200,
+                json={
+                    "id": "imgtask_1",
+                    "object": "image.task",
+                    "status": "queued",
+                    "model": "jimeng_t2i_v31",
+                },
+            )
         if request.url.path == "/v1/audio/speech":
             return httpx.Response(200, json={"data": [{"url": "https://example.test/a.mp3"}]})
         if request.url.path == "/v1/audio/transcriptions":
@@ -174,6 +186,11 @@ def test_native_surface_and_sse_streaming() -> None:
         assert client.tasks.cancel("task_1").status == "canceled"
         assert client.tasks.retry("task_1").status == "queued"
         assert client.images.generate(model="seedream-image", prompt="hi").data
+        assert client.images.create_task(
+            model="jimeng_t2i_v31",
+            prompt="hi",
+            idempotency_key="client-image-task-001",
+        ).id == "imgtask_1"
         assert client.audio.speech(model="tts", input="hi").data
         assert client.audio.transcription(model="asr", file_url="https://a.test").text == "hello"
         assert client.three_d.generate(model="tripo-3d", prompt="mesh").id == "task_3d"
