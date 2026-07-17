@@ -24,12 +24,6 @@ REQUEST_BODY: dict[str, Any] = {
             "image_url": {"url": "https://example.com/reference.png"},
         }
     ],
-    "provider": {
-        "provider_id": "doubao",
-        "options": {
-            "doubao": {"some_provider_option": "value"},
-        },
-    },
     "background": "transparent",
     "aspect_ratio": "1:1",
     "resolution": "2K",

@@ -198,6 +198,33 @@ def test_native_surface_and_sse_streaming() -> None:
         client.close()
 
 
+def test_images_generate_sanitizes_provider_for_create_images() -> None:
+    requests: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/images"
+        requests.append(json.loads(request.content))
+        return httpx.Response(200, json={"data": [{"b64_json": "AAAA"}]})
+
+    with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        client.images.generate(model="seedream-image", prompt="hi", provider="doubao")
+        client.images.generate(
+            model="seedream-image",
+            prompt="hi",
+            provider={"provider_id": "doubao", "options": {"doubao": {"watermark": False}}},
+        )
+
+    assert "provider" not in requests[0]
+    assert requests[1]["provider"] == {
+        "provider_id": "doubao",
+        "options": {"doubao": {"watermark": False}},
+    }
+
+
 def test_chat_stream_error_frame_preserves_string_code() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/api/v1/chat/completions"

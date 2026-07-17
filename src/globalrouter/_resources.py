@@ -507,7 +507,7 @@ class ImagesResource(BaseResource):
             "POST",
             "/api/v1/images",
             APIResponse,
-            json_body=self._payload(request, params),
+            json_body=self._create_images_payload(request, params),
         )
 
     async def generate_async(
@@ -519,8 +519,35 @@ class ImagesResource(BaseResource):
             "POST",
             "/api/v1/images",
             APIResponse,
-            json_body=self._payload(request, params),
+            json_body=self._create_images_payload(request, params),
         )
+
+    def _create_images_payload(
+        self,
+        request: Optional[Mapping[str, Any]],
+        params: dict[str, Any],
+    ) -> JSONDict:
+        payload = self._payload(request, params)
+        provider = payload.get("provider")
+        if provider is None:
+            payload.pop("provider", None)
+            return payload
+        if not isinstance(provider, Mapping):
+            payload.pop("provider", None)
+            return payload
+
+        normalized_provider: JSONDict = {}
+        provider_id = provider.get("provider_id")
+        if isinstance(provider_id, str) and provider_id.strip():
+            normalized_provider["provider_id"] = provider_id
+        options = provider.get("options")
+        if isinstance(options, Mapping) and options:
+            normalized_provider["options"] = dict(options)
+        if normalized_provider:
+            payload["provider"] = normalized_provider
+        else:
+            payload.pop("provider", None)
+        return payload
 
     def create_task(
         self,
