@@ -1,47 +1,111 @@
 from __future__ import annotations
 
-from _example_utils import run_sdk_examples
+import json
+import os
+import shlex
+import sys
+from pathlib import Path
+from typing import Any
 
-# Request payload copied from https://test-global-router.xiaoniuds.com/zh-CN/docs/reference/videos/create-video.
-EXAMPLES = {
-    "seedance_video": {
-        "model": "doubao-seedance-1-0-pro-fast-251015",
-        "prompt": "A quiet city rooftop at sunset, slow cinematic push-in",
-        "aspect_ratio": "16:9",
-        "duration": 5,
-        "resolution": "720p",
-        "sr": {
-            "resolution": "1080p",
+import httpx
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from globalrouter import GlobalRouter  # noqa: E402
+
+
+REQUEST_BODY: dict[str, Any] = {
+    "model": "doubao-seedance-1-0-pro-fast-251015",
+    "prompt": "A quiet city rooftop at sunset, slow cinematic push-in",
+    "aspect_ratio": "16:9",
+    "duration": 5,
+    "resolution": "720p",
+    "sr": {"resolution": "1080p"},
+    "seed": 12345,
+    "generate_audio": True,
+    "callback_url": "https://example.com/webhooks/video",
+    "frame_images": [
+        {
+            "type": "image_url",
+            "image_url": {"url": "https://example.com/assets/opening-frame.png"},
+            "frame_type": "first_frame",
+        }
+    ],
+    "input_references": [
+        {
+            "type": "image_url",
+            "image_url": {"url": "https://example.com/assets/reference.png"},
+        }
+    ],
+    "provider": {
+        "provider_id": "doubao",
+        "options": {
+            "doubao": {"some_provider_option": "value"},
         },
-        "seed": 12345,
-        "generate_audio": True,
-        "callback_url": "https://example.com/webhooks/video",
-        "frame_images": [
-            {
-                "type": "image_url",
-                "image_url": {"url": "https://example.com/assets/opening-frame.png"},
-                "frame_type": "first_frame",
-            }
-        ],
-        "input_references": [
-            {
-                "type": "image_url",
-                "image_url": {"url": "https://example.com/assets/reference.png"},
-            }
-        ],
-        "provider": {
-            "provider_id": "doubao",
-            "options": {
-                "doubao": {"some_provider_option": "value"},
-            },
-        },
-    }
+    },
 }
 
 
-if __name__ == "__main__":
-    run_sdk_examples(
-        "Create video (/api/v1/videos)",
-        EXAMPLES,
-        lambda client, payload: client.videos.create(payload),
+def main() -> None:
+    if os.environ.get("GLOBALROUTER_EXAMPLE_REAL") == "1":
+        client = GlobalRouter(
+            api_key=os.environ["GLOBALROUTER_API_KEY"],
+            base_url=os.environ.get("GLOBALROUTER_BASE_URL", "https://api.globalrouter.com"),
+        )
+        try:
+            response = client.videos.create(REQUEST_BODY)
+            print(json.dumps(response.model_dump(mode="json", exclude_none=True), ensure_ascii=False, indent=2))
+        finally:
+            client.close()
+        return
+
+    captured: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        return httpx.Response(
+            202,
+            json={
+                "id": "job_123",
+                "polling_url": "/api/v1/videos/job_123",
+                "status": "pending",
+            },
+            request=request,
+        )
+
+    client = GlobalRouter(
+        api_key=os.environ.get("GLOBALROUTER_API_KEY", "sk-local-example"),
+        base_url=os.environ.get("GLOBALROUTER_BASE_URL", "http://127.0.0.1:8000"),
+        transport=httpx.MockTransport(handler),
+        max_retries=0,
     )
+    try:
+        response = client.videos.create(REQUEST_BODY)
+    finally:
+        client.close()
+
+    print("# POST /api/v1/videos")
+    print("\n# Request JSON")
+    print(json.dumps(json.loads(captured[0].content.decode("utf-8")), ensure_ascii=False, indent=2))
+    print("\n# cURL")
+    print(curl_for_request(captured[0]))
+    print("\n# Mock response")
+    print(json.dumps(response.model_dump(mode="json", exclude_none=True), ensure_ascii=False, indent=2))
+
+
+def curl_for_request(request: httpx.Request) -> str:
+    lines = [f"curl -X {request.method} {shlex.quote(str(request.url))}"]
+    for key, value in request.headers.items():
+        if key.lower() in {"accept-encoding", "connection", "host", "content-length"}:
+            continue
+        if key.lower() == "authorization":
+            value = "Bearer ${GLOBALROUTER_API_KEY}"
+        lines.append(f"  -H {shlex.quote(f'{key}: {value}')}")
+    body = json.dumps(json.loads(request.content.decode("utf-8")), ensure_ascii=False, indent=2)
+    lines.append(f"  --data-raw {shlex.quote(body)}")
+    return " \\\n".join(lines)
+
+
+if __name__ == "__main__":
+    main()

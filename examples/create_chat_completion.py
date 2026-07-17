@@ -16,29 +16,11 @@ from globalrouter import GlobalRouter  # noqa: E402
 
 
 REQUEST_BODY: dict[str, Any] = {
-    "model": "seedream-image",
-    "prompt": "生成一张简洁的模型网关架构图。",
-    "input_references": [
-        {
-            "type": "image_url",
-            "image_url": {"url": "https://example.com/reference.png"},
-        }
+    "model": "qwen3-32b",
+    "messages": [
+        {"role": "user", "content": "用三句话介绍 GlobalRouter。"},
     ],
-    "provider": {
-        "provider_id": "doubao",
-        "options": {
-            "doubao": {"some_provider_option": "value"},
-        },
-    },
-    "background": "transparent",
-    "aspect_ratio": "1:1",
-    "resolution": "2K",
-    "output_compression": 90,
-    "output_format": "png",
-    "quality": "high",
-    "seed": 42,
     "stream": False,
-    "n": 1,
 }
 
 
@@ -49,7 +31,7 @@ def main() -> None:
             base_url=os.environ.get("GLOBALROUTER_BASE_URL", "https://api.globalrouter.com"),
         )
         try:
-            response = client.images.generate(REQUEST_BODY)
+            response = client.chat.send(REQUEST_BODY)
             print(json.dumps(response.model_dump(mode="json", exclude_none=True), ensure_ascii=False, indent=2))
         finally:
             client.close()
@@ -62,9 +44,25 @@ def main() -> None:
         return httpx.Response(
             200,
             json={
+                "id": "chatcmpl_123",
+                "object": "chat.completion",
                 "created": 1748372400,
-                "data": [{"b64_json": "iVBORw0KGgoAAAANSUhEUg...", "media_type": "image/png"}],
-                "usage": {"prompt_tokens": 0, "completion_tokens": 4175, "total_tokens": 4175, "cost": 0.04},
+                "model": "qwen3-32b",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": (
+                                "GlobalRouter 是统一模型路由层。"
+                                "它用同一套 API 连接不同模型和 Provider。"
+                                "你可以通过模型 ID、鉴权和参数控制完成聊天、图片与视频生成。"
+                            ),
+                        },
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 18, "completion_tokens": 46, "total_tokens": 64, "cost": 0.0012},
             },
             request=request,
         )
@@ -76,11 +74,11 @@ def main() -> None:
         max_retries=0,
     )
     try:
-        response = client.images.generate(REQUEST_BODY)
+        response = client.chat.send(REQUEST_BODY)
     finally:
         client.close()
 
-    print("# POST /api/v1/images")
+    print("# POST /api/v1/chat/completions")
     print("\n# Request JSON")
     print(json.dumps(json.loads(captured[0].content.decode("utf-8")), ensure_ascii=False, indent=2))
     print("\n# cURL")
@@ -90,16 +88,16 @@ def main() -> None:
 
 
 def curl_for_request(request: httpx.Request) -> str:
+    body = json.dumps(json.loads(request.content.decode("utf-8")), ensure_ascii=False, indent=2)
     lines = [f"curl -X {request.method} {shlex.quote(str(request.url))}"]
-    for key, value in request.headers.items():
-        if key.lower() in {"accept-encoding", "connection", "host", "content-length"}:
+    for key, value in sorted(request.headers.items()):
+        if key.lower() == "content-length":
             continue
         if key.lower() == "authorization":
             value = "Bearer ${GLOBALROUTER_API_KEY}"
         lines.append(f"  -H {shlex.quote(f'{key}: {value}')}")
-    body = json.dumps(json.loads(request.content.decode("utf-8")), ensure_ascii=False, indent=2)
     lines.append(f"  --data-raw {shlex.quote(body)}")
-    return " \\\n".join(lines)
+    return " \\\n+".replace("+", "").join(lines)
 
 
 if __name__ == "__main__":
