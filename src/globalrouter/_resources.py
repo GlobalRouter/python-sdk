@@ -522,6 +522,46 @@ class ImagesResource(BaseResource):
             json_body=self._payload(request, params),
         )
 
+    def create_task(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> APIResponse:
+        return self._client.request_model(
+            "POST",
+            "/api/v1/image-tasks",
+            APIResponse,
+            json_body=self._payload(request, params),
+            headers=_idempotency_header(params.get("idempotency_key")),
+        )
+
+    async def create_task_async(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> APIResponse:
+        return await self._client.request_model_async(
+            "POST",
+            "/api/v1/image-tasks",
+            APIResponse,
+            json_body=self._payload(request, params),
+            headers=_idempotency_header(params.get("idempotency_key")),
+        )
+
+    def get_task(self, image_task_id: str) -> APIResponse:
+        return self._client.request_model(
+            "GET",
+            f"/api/v1/image-tasks/{image_task_id}",
+            APIResponse,
+        )
+
+    async def get_task_async(self, image_task_id: str) -> APIResponse:
+        return await self._client.request_model_async(
+            "GET",
+            f"/api/v1/image-tasks/{image_task_id}",
+            APIResponse,
+        )
+
 
 class AudioResource(BaseResource):
     def speech(self, request: Optional[Mapping[str, Any]] = None, **params: Any) -> APIResponse:

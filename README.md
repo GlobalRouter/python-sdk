@@ -68,12 +68,20 @@ task = client.tasks.create(
 
 for event in client.tasks.events(task.id):
     print(event)
+
+image_task = client.images.create_task(
+    model="jimeng_t2i_v31",
+    prompt="a calm dashboard",
+)
+image_task = client.images.get_task(image_task.id)
 ```
 
 Available native resources:
 
 - `client.tasks`
 - `client.images`
+  - `client.images.create_task`
+  - `client.images.get_task`
 - `client.audio`
 - `client.three_d`
 
