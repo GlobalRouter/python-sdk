@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import runpy
 from collections.abc import Iterator
 from hashlib import sha256
 from hmac import new as hmac_new
@@ -776,6 +777,36 @@ def test_seedance_compatibility_readme_does_not_replace_native_resources() -> No
 
     assert "additional compatibility API entry" in readme
     assert "does not replace `client.videos` or `client.tasks`" in normalized_readme
+
+
+def test_seedance_compatibility_example_defaults_to_local_mock(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sentinel_api_key = "sk-sentinel-example-key"
+
+    def forbid_outbound_http(*args: Any, **kwargs: Any) -> httpx.Response:
+        raise AssertionError("The default example must not make outbound HTTP requests")
+
+    monkeypatch.delenv("GLOBALROUTER_EXAMPLE_REAL", raising=False)
+    monkeypatch.setenv("GLOBALROUTER_API_KEY", sentinel_api_key)
+    monkeypatch.setenv("GLOBALROUTER_BASE_URL", "https://api.production.example.test")
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", forbid_outbound_http)
+
+    example = Path(__file__).resolve().parents[1] / "examples" / "seedance_compatibility.py"
+    runpy.run_path(str(example), run_name="__main__")
+
+    captured = capsys.readouterr()
+    output = captured.out
+    for request_path in (
+        "POST /v1/video/generations",
+        "POST /api/v3/assets/groups",
+        "POST /api/v3/assets",
+    ):
+        assert request_path in output
+    for response_id in ("task_example_123", "group_example_123", "asset_example_123"):
+        assert response_id in output
+    assert sentinel_api_key not in f"{captured.out}{captured.err}"
 
 
 def _sse_lines(items: list[dict[str, Any] | str]) -> Iterator[bytes]:
