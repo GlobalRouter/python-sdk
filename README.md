@@ -87,8 +87,9 @@ Available native resources:
 
 ## Seedance Compatibility API
 
-`client.seedance` is an additional compatibility API entry alongside the native resources.
-Use it when an integration needs the compatibility video-generation and asset methods.
+`client.seedance` is an additional compatibility API entry alongside the native resources. It does
+not replace `client.videos` or `client.tasks`; use it when an integration needs the compatibility
+video-generation and asset methods.
 
 ```python
 video = client.seedance.create_video_generation(

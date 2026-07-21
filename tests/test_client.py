@@ -770,6 +770,14 @@ def test_seedance_compatibility_docs_and_example_are_safe() -> None:
         assert forbidden_text not in documentation.lower()
 
 
+def test_seedance_compatibility_readme_does_not_replace_native_resources() -> None:
+    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+    normalized_readme = " ".join(readme.split())
+
+    assert "additional compatibility API entry" in readme
+    assert "does not replace `client.videos` or `client.tasks`" in normalized_readme
+
+
 def _sse_lines(items: list[dict[str, Any] | str]) -> Iterator[bytes]:
     for item in items:
         payload = item if isinstance(item, str) else json.dumps(item)
