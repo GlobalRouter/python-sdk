@@ -23,6 +23,7 @@ from globalrouter._resources import (
     ModelsResource,
     ProvidersResource,
     ResponsesResource,
+    SeedanceResource,
     TasksResource,
     ThreeDResource,
     VideosResource,
@@ -74,6 +75,7 @@ class GlobalRouter:
         self.keys = KeysResource(self)
         self.providers = ProvidersResource(self)
         self.videos = VideosResource(self)
+        self.seedance = SeedanceResource(self)
         self.tasks = TasksResource(self)
         self.images = ImagesResource(self)
         self.audio = AudioResource(self)

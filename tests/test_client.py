@@ -25,6 +25,124 @@ def test_default_base_url_uses_production_api_domain(monkeypatch: pytest.MonkeyP
         assert client.base_url == "https://api.globalrouter.com"
 
 
+def test_seedance_sync_compatibility_surface() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["authorization"] == "Bearer sk-test-local"
+        requests.append(request)
+        if request.method == "POST" and request.url.path == "/v1/video/generations":
+            return httpx.Response(
+                200,
+                json={
+                    "code": "success",
+                    "message": "",
+                    "data": {"id": "task_gr_123", "status": "queued"},
+                },
+            )
+        if request.method == "GET" and request.url.path == "/v1/video/generations/task_gr_123":
+            return httpx.Response(
+                200,
+                json={
+                    "code": "success",
+                    "message": "",
+                    "data": {"id": "task_gr_123", "status": "completed"},
+                },
+            )
+        if request.method == "POST" and request.url.path == "/api/v3/assets/groups":
+            return httpx.Response(
+                200,
+                json={"code": "success", "message": "", "data": {"id": "group_gr_123"}},
+            )
+        if request.method == "POST" and request.url.path == "/api/v3/assets":
+            return httpx.Response(
+                200,
+                json={
+                    "code": "success",
+                    "message": "",
+                    "data": {"id": "asset_gr_123", "url": "https://cdn.example.test/reference.png"},
+                },
+            )
+        if request.method == "POST" and request.url.path == "/api/v3/assets/get":
+            return httpx.Response(
+                200,
+                json={
+                    "code": "success",
+                    "message": "",
+                    "data": {"id": "asset_gr_123", "url": "https://cdn.example.test/reference.png"},
+                },
+            )
+        return httpx.Response(404, json={"error": {"message": "missing"}})
+
+    with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        video = client.seedance.create_video_generation(
+            model="doubao-seedance-2-0-260128",
+            content=[{"type": "text", "text": "a quiet product demo"}],
+            idempotency_key="seedance-idem-1",
+        )
+        video_status = client.seedance.get_video_generation("task_gr_123")
+        group = client.seedance.create_asset_group(
+            model="doubao-seedance-2-0-260128",
+            Name="product references",
+            Description="launch campaign",
+        )
+        asset = client.seedance.create_asset(
+            model="doubao-seedance-2-0-260128",
+            URL="https://cdn.example.test/reference.png",
+            AssetType="Image",
+            GroupId="group_gr_123",
+            Name="product reference",
+        )
+        fetched_asset = client.seedance.get_asset(
+            model="doubao-seedance-2-0-260128",
+            Id="asset_gr_123",
+        )
+
+    assert [(request.method, request.url.path) for request in requests] == [
+        ("POST", "/v1/video/generations"),
+        ("GET", "/v1/video/generations/task_gr_123"),
+        ("POST", "/api/v3/assets/groups"),
+        ("POST", "/api/v3/assets"),
+        ("POST", "/api/v3/assets/get"),
+    ]
+    assert requests[0].headers["idempotency-key"] == "seedance-idem-1"
+    assert [json.loads(request.content) if request.content else {} for request in requests] == [
+        {
+            "model": "doubao-seedance-2-0-260128",
+            "content": [{"type": "text", "text": "a quiet product demo"}],
+        },
+        {},
+        {
+            "model": "doubao-seedance-2-0-260128",
+            "Name": "product references",
+            "Description": "launch campaign",
+        },
+        {
+            "model": "doubao-seedance-2-0-260128",
+            "URL": "https://cdn.example.test/reference.png",
+            "AssetType": "Image",
+            "GroupId": "group_gr_123",
+            "Name": "product reference",
+        },
+        {"model": "doubao-seedance-2-0-260128", "Id": "asset_gr_123"},
+    ]
+    assert video.data == {"id": "task_gr_123", "status": "queued"}
+    assert video_status.data == {"id": "task_gr_123", "status": "completed"}
+    assert group.data["id"] == "group_gr_123"
+    assert asset.data == {
+        "id": "asset_gr_123",
+        "url": "https://cdn.example.test/reference.png",
+    }
+    assert fetched_asset.data == {
+        "id": "asset_gr_123",
+        "url": "https://cdn.example.test/reference.png",
+    }
+
+
 def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GLOBALROUTER_API_KEY", "sk-test-local")
     requests: list[httpx.Request] = []

@@ -387,6 +387,64 @@ class VideosResource(BaseResource):
         return await self._client.request_model_async("GET", "/api/v1/videos/models", APIResponse)
 
 
+class SeedanceResource(BaseResource):
+    def create_video_generation(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> APIResponse:
+        return self._client.request_model(
+            "POST",
+            "/v1/video/generations",
+            APIResponse,
+            json_body=self._payload_without_params(request, params, {"idempotency_key"}),
+            headers=_idempotency_header(params.get("idempotency_key")),
+        )
+
+    def get_video_generation(self, generation_id: str) -> APIResponse:
+        return self._client.request_model(
+            "GET",
+            f"/v1/video/generations/{generation_id}",
+            APIResponse,
+        )
+
+    def create_asset_group(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> APIResponse:
+        return self._client.request_model(
+            "POST",
+            "/api/v3/assets/groups",
+            APIResponse,
+            json_body=self._payload(request, params),
+        )
+
+    def create_asset(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> APIResponse:
+        return self._client.request_model(
+            "POST",
+            "/api/v3/assets",
+            APIResponse,
+            json_body=self._payload(request, params),
+        )
+
+    def get_asset(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> APIResponse:
+        return self._client.request_model(
+            "POST",
+            "/api/v3/assets/get",
+            APIResponse,
+            json_body=self._payload(request, params),
+        )
+
+
 class TasksResource(BaseResource):
     def create(self, request: Optional[Mapping[str, Any]] = None, **params: Any) -> Task:
         return self._client.request_model(
