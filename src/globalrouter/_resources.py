@@ -402,8 +402,29 @@ class SeedanceResource(BaseResource):
             headers=headers,
         )
 
+    async def create_video_generation_async(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> APIResponse:
+        payload, headers = self._video_generation_payload_and_headers(request, params)
+        return await self._client.request_model_async(
+            "POST",
+            "/v1/video/generations",
+            APIResponse,
+            json_body=payload,
+            headers=headers,
+        )
+
     def get_video_generation(self, task_id: str) -> APIResponse:
         return self._client.request_model(
+            "GET",
+            f"/v1/video/generations/{task_id}",
+            APIResponse,
+        )
+
+    async def get_video_generation_async(self, task_id: str) -> APIResponse:
+        return await self._client.request_model_async(
             "GET",
             f"/v1/video/generations/{task_id}",
             APIResponse,
@@ -436,6 +457,18 @@ class SeedanceResource(BaseResource):
             json_body=self._payload(request, params),
         )
 
+    async def create_asset_group_async(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> APIResponse:
+        return await self._client.request_model_async(
+            "POST",
+            "/api/v3/assets/groups",
+            APIResponse,
+            json_body=self._payload(request, params),
+        )
+
     def create_asset(
         self,
         request: Optional[Mapping[str, Any]] = None,
@@ -448,12 +481,36 @@ class SeedanceResource(BaseResource):
             json_body=self._payload(request, params),
         )
 
+    async def create_asset_async(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> APIResponse:
+        return await self._client.request_model_async(
+            "POST",
+            "/api/v3/assets",
+            APIResponse,
+            json_body=self._payload(request, params),
+        )
+
     def get_asset(
         self,
         request: Optional[Mapping[str, Any]] = None,
         **params: Any,
     ) -> APIResponse:
         return self._client.request_model(
+            "POST",
+            "/api/v3/assets/get",
+            APIResponse,
+            json_body=self._payload(request, params),
+        )
+
+    async def get_asset_async(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> APIResponse:
+        return await self._client.request_model_async(
             "POST",
             "/api/v3/assets/get",
             APIResponse,

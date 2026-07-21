@@ -143,6 +143,122 @@ def test_seedance_sync_compatibility_surface() -> None:
     }
 
 
+@pytest.mark.asyncio
+async def test_seedance_async_compatibility_surface() -> None:
+    requests: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["authorization"] == "Bearer sk-test-local"
+        requests.append(request)
+        if request.method == "POST" and request.url.path == "/v1/video/generations":
+            return httpx.Response(
+                200,
+                json={
+                    "code": "success",
+                    "message": "",
+                    "data": {"id": "task_gr_async", "status": "queued"},
+                },
+            )
+        if request.method == "GET" and request.url.path == "/v1/video/generations/task_gr_async":
+            return httpx.Response(
+                200,
+                json={
+                    "code": "success",
+                    "message": "",
+                    "data": {"id": "task_gr_async", "status": "completed"},
+                },
+            )
+        if request.method == "POST" and request.url.path == "/api/v3/assets/groups":
+            return httpx.Response(
+                200,
+                json={"code": "success", "message": "", "data": {"id": "group_gr_async"}},
+            )
+        if request.method == "POST" and request.url.path == "/api/v3/assets":
+            return httpx.Response(
+                200,
+                json={
+                    "code": "success",
+                    "message": "",
+                    "data": {
+                        "id": "asset_gr_async",
+                        "url": "https://cdn.example.test/reference.png",
+                    },
+                },
+            )
+        if request.method == "POST" and request.url.path == "/api/v3/assets/get":
+            return httpx.Response(
+                200,
+                json={
+                    "code": "success",
+                    "message": "",
+                    "data": {
+                        "id": "asset_gr_async",
+                        "url": "https://cdn.example.test/reference.png",
+                    },
+                },
+            )
+        return httpx.Response(404, json={"error": {"message": "missing"}})
+
+    async with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        video = await client.seedance.create_video_generation_async(
+            model="doubao-seedance-2-0-260128",
+            content=[{"type": "text", "text": "a quiet product demo"}],
+            idempotency_key="seedance-async-1",
+        )
+        video_status = await client.seedance.get_video_generation_async(task_id="task_gr_async")
+        group = await client.seedance.create_asset_group_async(
+            model="doubao-seedance-2-0-260128",
+            Name="product references",
+        )
+        asset = await client.seedance.create_asset_async(
+            model="doubao-seedance-2-0-260128",
+            URL="https://cdn.example.test/reference.png",
+            AssetType="Image",
+        )
+        fetched_asset = await client.seedance.get_asset_async(
+            model="doubao-seedance-2-0-260128",
+            Id="asset_gr_async",
+        )
+
+    assert [(request.method, request.url.path) for request in requests] == [
+        ("POST", "/v1/video/generations"),
+        ("GET", "/v1/video/generations/task_gr_async"),
+        ("POST", "/api/v3/assets/groups"),
+        ("POST", "/api/v3/assets"),
+        ("POST", "/api/v3/assets/get"),
+    ]
+    assert requests[0].headers["idempotency-key"] == "seedance-async-1"
+    assert [json.loads(request.content) if request.content else {} for request in requests] == [
+        {
+            "model": "doubao-seedance-2-0-260128",
+            "content": [{"type": "text", "text": "a quiet product demo"}],
+        },
+        {},
+        {"model": "doubao-seedance-2-0-260128", "Name": "product references"},
+        {
+            "model": "doubao-seedance-2-0-260128",
+            "URL": "https://cdn.example.test/reference.png",
+            "AssetType": "Image",
+        },
+        {"model": "doubao-seedance-2-0-260128", "Id": "asset_gr_async"},
+    ]
+    assert video.data == {"id": "task_gr_async", "status": "queued"}
+    assert video_status.data == {"id": "task_gr_async", "status": "completed"}
+    assert group.data == {"id": "group_gr_async"}
+    assert asset.data == {
+        "id": "asset_gr_async",
+        "url": "https://cdn.example.test/reference.png",
+    }
+    assert fetched_asset.data == {
+        "id": "asset_gr_async",
+        "url": "https://cdn.example.test/reference.png",
+    }
+
+
 def test_seedance_get_video_generation_accepts_task_id_keyword() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["authorization"] == "Bearer sk-test-local"
