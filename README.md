@@ -85,6 +85,21 @@ Available native resources:
 - `client.audio`
 - `client.three_d`
 
+## Seedance Compatibility API
+
+`client.seedance` is an additional compatibility API entry alongside the native resources.
+Use it when an integration needs the compatibility video-generation and asset methods.
+
+```python
+video = client.seedance.create_video_generation(
+    model="doubao-seedance-2-0-260128",
+    content=[{"type": "text", "text": "A quiet product demo"}],
+)
+print(video.data)
+```
+
+The compatibility video call accepts `content`; it is separate from the native resource methods.
+
 ## Async
 
 Every resource includes async methods with the `_async` suffix.

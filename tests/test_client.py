@@ -4,6 +4,7 @@ import json
 from collections.abc import Iterator
 from hashlib import sha256
 from hmac import new as hmac_new
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -737,6 +738,36 @@ async def test_async_stream_retries_5xx_before_returning_response() -> None:
         ]
 
     assert attempts == 2
+
+
+def test_seedance_compatibility_docs_and_example_are_safe() -> None:
+    root = Path(__file__).resolve().parents[1]
+    documentation_paths = (
+        root / "README.md",
+        root / "examples" / "README.md",
+        root / "examples" / "seedance_compatibility.py",
+    )
+    documentation = "\n".join(path.read_text(encoding="utf-8") for path in documentation_paths)
+
+    for required_text in (
+        "client.seedance",
+        "create_video_generation",
+        "create_asset",
+        "AssetType",
+        "doubao-seedance-2-0-260128",
+    ):
+        assert required_text in documentation
+
+    assert "httpx.MockTransport" in documentation
+    assert "GLOBALROUTER_EXAMPLE_REAL" in documentation
+    for forbidden_text in (
+        "cloubic",
+        "real-person verification",
+        "real person verification",
+        "identity verification",
+        "liveness verification",
+    ):
+        assert forbidden_text not in documentation.lower()
 
 
 def _sse_lines(items: list[dict[str, Any] | str]) -> Iterator[bytes]:
