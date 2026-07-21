@@ -143,6 +143,77 @@ def test_seedance_sync_compatibility_surface() -> None:
     }
 
 
+def test_seedance_get_video_generation_accepts_task_id_keyword() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["authorization"] == "Bearer sk-test-local"
+        assert request.method == "GET"
+        assert request.url.path == "/v1/video/generations/task_gr_123"
+        return httpx.Response(
+            200,
+            json={
+                "code": "success",
+                "message": "",
+                "data": {"id": "task_gr_123", "status": "completed"},
+            },
+        )
+
+    with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        response = client.seedance.get_video_generation(task_id="task_gr_123")
+
+    assert response.data == {"id": "task_gr_123", "status": "completed"}
+
+
+def test_seedance_video_generation_mapping_idempotency_uses_header() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["authorization"] == "Bearer sk-test-local"
+        assert request.method == "POST"
+        assert request.url.path == "/v1/video/generations"
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={"code": "success", "message": "", "data": {"id": "task_gr_123"}},
+        )
+
+    request = {
+        "model": "doubao-seedance-2-0-260128",
+        "content": [{"type": "text", "text": "a quiet product demo"}],
+        "idempotency_key": "seedance-request-idem-1",
+    }
+    with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        from_mapping = client.seedance.create_video_generation(request)
+        keyword_wins = client.seedance.create_video_generation(
+            request,
+            idempotency_key="seedance-keyword-idem-2",
+        )
+
+    assert from_mapping.data["id"] == "task_gr_123"
+    assert keyword_wins.data["id"] == "task_gr_123"
+    assert [request.headers["idempotency-key"] for request in requests] == [
+        "seedance-request-idem-1",
+        "seedance-keyword-idem-2",
+    ]
+    assert [json.loads(request.content) for request in requests] == [
+        {
+            "model": "doubao-seedance-2-0-260128",
+            "content": [{"type": "text", "text": "a quiet product demo"}],
+        },
+        {
+            "model": "doubao-seedance-2-0-260128",
+            "content": [{"type": "text", "text": "a quiet product demo"}],
+        },
+    ]
+
+
 def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GLOBALROUTER_API_KEY", "sk-test-local")
     requests: list[httpx.Request] = []

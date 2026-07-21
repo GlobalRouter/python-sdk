@@ -393,20 +393,36 @@ class SeedanceResource(BaseResource):
         request: Optional[Mapping[str, Any]] = None,
         **params: Any,
     ) -> APIResponse:
+        payload, headers = self._video_generation_payload_and_headers(request, params)
         return self._client.request_model(
             "POST",
             "/v1/video/generations",
             APIResponse,
-            json_body=self._payload_without_params(request, params, {"idempotency_key"}),
-            headers=_idempotency_header(params.get("idempotency_key")),
+            json_body=payload,
+            headers=headers,
         )
 
-    def get_video_generation(self, generation_id: str) -> APIResponse:
+    def get_video_generation(self, task_id: str) -> APIResponse:
         return self._client.request_model(
             "GET",
-            f"/v1/video/generations/{generation_id}",
+            f"/v1/video/generations/{task_id}",
             APIResponse,
         )
+
+    def _video_generation_payload_and_headers(
+        self,
+        request: Optional[Mapping[str, Any]],
+        params: dict[str, Any],
+    ) -> tuple[JSONDict, Optional[dict[str, str]]]:
+        payload = self._payload_without_params(request, params, {"idempotency_key"})
+        payload.pop("idempotency_key", None)
+        if "idempotency_key" in params:
+            idempotency_key = params["idempotency_key"]
+        elif request is not None:
+            idempotency_key = request.get("idempotency_key")
+        else:
+            idempotency_key = None
+        return payload, _idempotency_header(idempotency_key)
 
     def create_asset_group(
         self,
