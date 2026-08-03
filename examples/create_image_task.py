@@ -12,7 +12,7 @@ import httpx
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from globalrouter import GlobalRouter  # noqa: E402
+from globalrouter import GlobalRouter  # noqa: E402, I001
 
 
 REQUEST_BODY: dict[str, Any] = {
@@ -50,7 +50,13 @@ def main() -> None:
         )
         try:
             response = client.images.create_task(REQUEST_BODY, idempotency_key=idempotency_key)
-            print(json.dumps(response.model_dump(mode="json", exclude_none=True), ensure_ascii=False, indent=2))
+            print(
+                json.dumps(
+                    response.model_dump(mode="json", exclude_none=True),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
         finally:
             client.close()
         return
@@ -94,7 +100,13 @@ def main() -> None:
     print("\n# cURL")
     print(curl_for_request(captured[0]))
     print("\n# Mock response")
-    print(json.dumps(response.model_dump(mode="json", exclude_none=True), ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            response.model_dump(mode="json", exclude_none=True),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 def curl_for_request(request: httpx.Request) -> str:

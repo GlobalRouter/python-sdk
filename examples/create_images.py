@@ -12,7 +12,7 @@ import httpx
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from globalrouter import GlobalRouter  # noqa: E402
+from globalrouter import GlobalRouter  # noqa: E402, I001
 
 
 REQUEST_BODY: dict[str, Any] = {
@@ -44,7 +44,13 @@ def main() -> None:
         )
         try:
             response = client.images.generate(REQUEST_BODY)
-            print(json.dumps(response.model_dump(mode="json", exclude_none=True), ensure_ascii=False, indent=2))
+            print(
+                json.dumps(
+                    response.model_dump(mode="json", exclude_none=True),
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
         finally:
             client.close()
         return
@@ -58,7 +64,12 @@ def main() -> None:
             json={
                 "created": 1748372400,
                 "data": [{"b64_json": "iVBORw0KGgoAAAANSUhEUg...", "media_type": "image/png"}],
-                "usage": {"prompt_tokens": 0, "completion_tokens": 4175, "total_tokens": 4175, "cost": 0.04},
+                "usage": {
+                    "prompt_tokens": 0,
+                    "completion_tokens": 4175,
+                    "total_tokens": 4175,
+                    "cost": 0.04,
+                },
             },
             request=request,
         )
@@ -80,7 +91,13 @@ def main() -> None:
     print("\n# cURL")
     print(curl_for_request(captured[0]))
     print("\n# Mock response")
-    print(json.dumps(response.model_dump(mode="json", exclude_none=True), ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            response.model_dump(mode="json", exclude_none=True),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 def curl_for_request(request: httpx.Request) -> str:
