@@ -11,6 +11,7 @@ from globalrouter._models import (
     DeletedObject,
     JSONDict,
     ModelList,
+    SeedAudioResponse,
     Task,
     VideoJob,
 )
@@ -632,6 +633,30 @@ class AudioResource(BaseResource):
             "POST",
             "/v1/audio/transcriptions",
             APIResponse,
+            json_body=self._payload(request, params),
+        )
+
+    def seed_audio(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> SeedAudioResponse:
+        return self._client.request_model(
+            "POST",
+            "/doubao/api/v3/tts/create",
+            SeedAudioResponse,
+            json_body=self._payload(request, params),
+        )
+
+    async def seed_audio_async(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> SeedAudioResponse:
+        return await self._client.request_model_async(
+            "POST",
+            "/doubao/api/v3/tts/create",
+            SeedAudioResponse,
             json_body=self._payload(request, params),
         )
 

@@ -15,6 +15,7 @@ python examples/create_chat_completion.py
 python examples/create_images.py
 python examples/create_image_task.py
 python examples/create_video.py
+python examples/create_seed_audio.py
 ```
 
 ## Files
@@ -23,5 +24,6 @@ python examples/create_video.py
 - `create_images.py` -> `POST /api/v1/images`, via `client.images.generate(...)`.
 - `create_image_task.py` -> `POST /api/v1/image-tasks`, via `client.images.create_task(...)`.
 - `create_video.py` -> `POST /api/v1/videos`, via `client.videos.create(...)`.
+- `create_seed_audio.py` -> `POST /doubao/api/v3/tts/create`, via `client.audio.seed_audio(...)`.
 
 The examples intentionally include only the public `/api/v1` request shapes shown in the GlobalRouter docs.

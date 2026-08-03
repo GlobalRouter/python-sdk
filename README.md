@@ -83,7 +83,28 @@ Available native resources:
   - `client.images.create_task`
   - `client.images.get_task`
 - `client.audio`
+  - `client.audio.seed_audio(...)`
+  - `await client.audio.seed_audio_async(...)`
 - `client.three_d`
+
+## Doubao SeedAudio
+
+```python
+response = client.audio.seed_audio(
+    {
+        "model": "doubao-seed-audio-1-0",
+        "text_prompt": "Warm acoustic guitar and soft piano, calm, instrumental",
+        "audio_config": {"format": "mp3"},
+        "watermark": False,
+    }
+)
+print(response.url, response.original_duration)
+```
+
+`seed_audio` and `seed_audio_async` send `POST /doubao/api/v3/tts/create`.
+The request accepts any `Mapping`, so new official SeedAudio fields can be
+used without waiting for an SDK release. Configure only the GlobalRouter API
+key; do not send a Volcengine `X-Api-Key`.
 
 ## Async
 
