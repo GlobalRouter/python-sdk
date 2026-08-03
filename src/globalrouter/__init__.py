@@ -6,6 +6,10 @@ from globalrouter._models import (
     ChatCompletionChunk,
     DeletedObject,
     ModelList,
+    SeedAudioResponse,
+    SeedAudioSubtitle,
+    SeedAudioSubtitleSentence,
+    SeedAudioSubtitleWord,
     Task,
     VideoJob,
 )
@@ -18,6 +22,10 @@ __all__ = [
     "GlobalRouter",
     "GlobalRouterError",
     "ModelList",
+    "SeedAudioResponse",
+    "SeedAudioSubtitle",
+    "SeedAudioSubtitleSentence",
+    "SeedAudioSubtitleWord",
     "Task",
     "VideoJob",
 ]

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -64,6 +64,34 @@ class VideoJob(GlobalRouterModel):
     content_url: Optional[str] = None
     usage: Any = None
     error: Any = None
+
+
+class SeedAudioSubtitleWord(GlobalRouterModel):
+    text: str = ""
+    start_time: Optional[int] = None
+    end_time: Optional[int] = None
+
+
+class SeedAudioSubtitleSentence(GlobalRouterModel):
+    text: str = ""
+    start_time: Optional[int] = None
+    end_time: Optional[int] = None
+    words: list[SeedAudioSubtitleWord] = Field(default_factory=list)
+
+
+class SeedAudioSubtitle(GlobalRouterModel):
+    text: str = ""
+    sentences: list[SeedAudioSubtitleSentence] = Field(default_factory=list)
+
+
+class SeedAudioResponse(GlobalRouterModel):
+    code: Optional[Union[int, str]] = None  # noqa: UP007 - Python 3.9 compatibility
+    message: Optional[str] = None
+    audio: Optional[str] = None
+    duration: Optional[float] = None
+    original_duration: Optional[float] = None
+    url: Optional[str] = None
+    subtitle: Optional[SeedAudioSubtitle] = None
 
 
 class DeletedObject(GlobalRouterModel):

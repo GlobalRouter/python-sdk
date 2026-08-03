@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 from collections.abc import Iterator
 from hashlib import sha256
 from hmac import new as hmac_new
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -196,6 +198,113 @@ def test_native_surface_and_sse_streaming() -> None:
         assert client.three_d.generate(model="tripo-3d", prompt="mesh").id == "task_3d"
     finally:
         client.close()
+
+
+def test_seed_audio_sync_uses_gr_auth_mapping_payload_and_typed_response() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.method == "POST"
+        assert request.url.path == "/doubao/api/v3/tts/create"
+        assert request.headers["authorization"] == "Bearer sk-test-local"
+        assert "x-api-key" not in request.headers
+        assert json.loads(request.content) == {
+            "model": "doubao-seed-audio-1-0",
+            "text_prompt": "A quiet piano solo",
+            "audio_config": {"format": "mp3", "future_official_field": True},
+        }
+        return httpx.Response(
+            200,
+            json={
+                "code": 0,
+                "message": "success",
+                "audio": "base64-audio",
+                "duration": 1.2,
+                "original_duration": 1.5,
+                "url": "https://cdn.example/audio.mp3",
+                "subtitle": {
+                    "text": "piano",
+                    "sentences": [
+                        {
+                            "text": "piano",
+                            "start_time": 0,
+                            "end_time": 1500,
+                            "words": [
+                                {"text": "piano", "start_time": 0, "end_time": 1500}
+                            ],
+                        }
+                    ],
+                },
+                "future_response_field": "preserved",
+            },
+        )
+
+    with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        response = client.audio.seed_audio(
+            {
+                "model": "doubao-seed-audio-1-0",
+                "text_prompt": "A quiet piano solo",
+                "audio_config": {"format": "mp3", "future_official_field": True},
+            }
+        )
+
+    assert response.audio == "base64-audio"
+    assert response.original_duration == 1.5
+    assert response.subtitle is not None
+    assert response.subtitle.sentences[0].words[0].text == "piano"
+    assert response.future_response_field == "preserved"
+    assert len(requests) == 1
+
+
+def test_seed_audio_real_example_uses_server_selected_provider() -> None:
+    example_path = Path(__file__).parents[1] / "examples" / "create_seed_audio.py"
+    spec = importlib.util.spec_from_file_location("create_seed_audio_example", example_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    request = module.real_request_body()
+
+    assert request["model"] == "doubao-seed-audio-1-0"
+    assert "provider" not in request
+    assert "references" not in request
+
+
+@pytest.mark.asyncio
+async def test_seed_audio_async_uses_same_path_body_and_response_model() -> None:
+    requests: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.url.path == "/doubao/api/v3/tts/create"
+        assert request.headers["authorization"] == "Bearer sk-test-local"
+        assert "x-api-key" not in request.headers
+        assert json.loads(request.content) == {
+            "model": "doubao-seed-audio-1-0",
+            "text_prompt": "A quiet piano solo",
+            "watermark": {"aigc_watermark": False},
+        }
+        return httpx.Response(200, json={"audio": "async-base64", "original_duration": 2.5})
+
+    async with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        response = await client.audio.seed_audio_async(
+            model="doubao-seed-audio-1-0",
+            text_prompt="A quiet piano solo",
+            watermark={"aigc_watermark": False},
+        )
+
+    assert response.audio == "async-base64"
+    assert response.original_duration == 2.5
+    assert len(requests) == 1
 
 
 def test_images_generate_sanitizes_provider_for_create_images() -> None:
