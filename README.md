@@ -93,9 +93,10 @@ Available native resources:
 response = client.audio.seed_audio(
     {
         "model": "doubao-seed-audio-1-0",
-        "text_prompt": "Warm acoustic guitar and soft piano, calm, instrumental",
-        "audio_config": {"format": "mp3"},
-        "watermark": False,
+        "text_prompt": "Use @音频1 as a style reference for a calm piano passage",
+        "references": [{"audio_url": "https://example.com/reference.mp3"}],
+        "audio_config": {"format": "mp3", "enable_subtitle": True},
+        "watermark": {"aigc_watermark": False},
     }
 )
 print(response.url, response.original_duration)

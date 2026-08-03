@@ -16,9 +16,10 @@ from globalrouter import GlobalRouter  # noqa: E402, I001
 
 REQUEST_BODY: dict[str, Any] = {
     "model": "doubao-seed-audio-1-0",
-    "text_prompt": "Warm acoustic guitar and soft piano, calm, instrumental",
-    "audio_config": {"format": "mp3"},
-    "watermark": False,
+    "text_prompt": "Use @音频1 as a style reference for a calm piano passage",
+    "references": [{"audio_url": "https://example.com/reference.mp3"}],
+    "audio_config": {"format": "mp3", "enable_subtitle": True},
+    "watermark": {"aigc_watermark": False},
 }
 
 
@@ -62,7 +63,17 @@ def mock_response(request: httpx.Request) -> httpx.Response:
             "duration": 12.0,
             "original_duration": 12.0,
             "url": "https://example.test/seed-audio.mp3",
-            "subtitle": [],
+            "subtitle": {
+                "text": "A calm piano passage",
+                "sentences": [
+                    {
+                        "text": "A calm piano passage",
+                        "start_time": 0,
+                        "end_time": 12000,
+                        "words": [],
+                    }
+                ],
+            },
         },
         request=request,
     )

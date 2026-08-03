@@ -8,6 +8,8 @@ from globalrouter._models import (
     ModelList,
     SeedAudioResponse,
     SeedAudioSubtitle,
+    SeedAudioSubtitleSentence,
+    SeedAudioSubtitleWord,
     Task,
     VideoJob,
 )
@@ -22,6 +24,8 @@ __all__ = [
     "ModelList",
     "SeedAudioResponse",
     "SeedAudioSubtitle",
+    "SeedAudioSubtitleSentence",
+    "SeedAudioSubtitleWord",
     "Task",
     "VideoJob",
 ]

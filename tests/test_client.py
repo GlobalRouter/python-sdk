@@ -221,7 +221,19 @@ def test_seed_audio_sync_uses_gr_auth_mapping_payload_and_typed_response() -> No
                 "duration": 1.2,
                 "original_duration": 1.5,
                 "url": "https://cdn.example/audio.mp3",
-                "subtitle": [{"text": "piano", "start_time": 0, "end_time": 1500}],
+                "subtitle": {
+                    "text": "piano",
+                    "sentences": [
+                        {
+                            "text": "piano",
+                            "start_time": 0,
+                            "end_time": 1500,
+                            "words": [
+                                {"text": "piano", "start_time": 0, "end_time": 1500}
+                            ],
+                        }
+                    ],
+                },
                 "future_response_field": "preserved",
             },
         )
@@ -241,7 +253,8 @@ def test_seed_audio_sync_uses_gr_auth_mapping_payload_and_typed_response() -> No
 
     assert response.audio == "base64-audio"
     assert response.original_duration == 1.5
-    assert response.subtitle[0].text == "piano"
+    assert response.subtitle is not None
+    assert response.subtitle.sentences[0].words[0].text == "piano"
     assert response.future_response_field == "preserved"
     assert len(requests) == 1
 
@@ -258,7 +271,7 @@ async def test_seed_audio_async_uses_same_path_body_and_response_model() -> None
         assert json.loads(request.content) == {
             "model": "doubao-seed-audio-1-0",
             "text_prompt": "A quiet piano solo",
-            "watermark": False,
+            "watermark": {"aigc_watermark": False},
         }
         return httpx.Response(200, json={"audio": "async-base64", "original_duration": 2.5})
 
@@ -270,7 +283,7 @@ async def test_seed_audio_async_uses_same_path_body_and_response_model() -> None
         response = await client.audio.seed_audio_async(
             model="doubao-seed-audio-1-0",
             text_prompt="A quiet piano solo",
-            watermark=False,
+            watermark={"aigc_watermark": False},
         )
 
     assert response.audio == "async-base64"
