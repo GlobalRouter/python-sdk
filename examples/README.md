@@ -26,4 +26,8 @@ python examples/create_seed_audio.py
 - `create_video.py` -> `POST /api/v1/videos`, via `client.videos.create(...)`.
 - `create_seed_audio.py` -> `POST /doubao/api/v3/tts/create`, via `client.audio.seed_audio(...)`.
 
+SeedAudio provider selection is server-side: the SDK sends only the
+GlobalRouter Bearer key and official request fields, while GlobalRouter routes
+the request through its dedicated `doubao_audio` provider.
+
 The examples intentionally include only the public `/api/v1` request shapes shown in the GlobalRouter docs.

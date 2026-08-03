@@ -259,6 +259,16 @@ def test_seed_audio_sync_uses_gr_auth_mapping_payload_and_typed_response() -> No
     assert len(requests) == 1
 
 
+def test_seed_audio_real_example_uses_server_selected_provider() -> None:
+    from examples.create_seed_audio import real_request_body
+
+    request = real_request_body()
+
+    assert request["model"] == "doubao-seed-audio-1-0"
+    assert "provider" not in request
+    assert "references" not in request
+
+
 @pytest.mark.asyncio
 async def test_seed_audio_async_uses_same_path_body_and_response_model() -> None:
     requests: list[httpx.Request] = []

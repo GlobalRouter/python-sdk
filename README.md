@@ -105,7 +105,9 @@ print(response.url, response.original_duration)
 `seed_audio` and `seed_audio_async` send `POST /doubao/api/v3/tts/create`.
 The request accepts any `Mapping`, so new official SeedAudio fields can be
 used without waiting for an SDK release. Configure only the GlobalRouter API
-key; do not send a Volcengine `X-Api-Key`.
+key; do not send a Volcengine `X-Api-Key`. GlobalRouter selects the dedicated
+`doubao_audio` provider and its upstream credential on the server, so the SDK
+does not send a `provider` field.
 
 ## Async
 

@@ -24,7 +24,8 @@ REQUEST_BODY: dict[str, Any] = {
 
 
 def main() -> None:
-    if os.environ.get("GLOBALROUTER_EXAMPLE_REAL") == "1":
+    real = os.environ.get("GLOBALROUTER_EXAMPLE_REAL") == "1"
+    if real:
         client = GlobalRouter(
             api_key=os.environ["GLOBALROUTER_API_KEY"],
             base_url=os.environ.get(
@@ -41,7 +42,9 @@ def main() -> None:
         )
 
     try:
-        response = client.audio.seed_audio(REQUEST_BODY)
+        response = client.audio.seed_audio(
+            real_request_body() if real else REQUEST_BODY
+        )
         print(
             json.dumps(
                 response.model_dump(mode="json", exclude_none=True),
@@ -51,6 +54,17 @@ def main() -> None:
         )
     finally:
         client.close()
+
+
+def real_request_body() -> dict[str, Any]:
+    return {
+        "model": "doubao-seed-audio-1-0",
+        "text_prompt": (
+            "Generate a calm piano passage with a soft, relaxing atmosphere."
+        ),
+        "audio_config": {"format": "mp3", "enable_subtitle": True},
+        "watermark": {"aigc_watermark": False},
+    }
 
 
 def mock_response(request: httpx.Request) -> httpx.Response:
