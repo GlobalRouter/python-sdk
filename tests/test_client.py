@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 from collections.abc import Iterator
 from hashlib import sha256
 from hmac import new as hmac_new
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -260,9 +262,13 @@ def test_seed_audio_sync_uses_gr_auth_mapping_payload_and_typed_response() -> No
 
 
 def test_seed_audio_real_example_uses_server_selected_provider() -> None:
-    from examples.create_seed_audio import real_request_body
+    example_path = Path(__file__).parents[1] / "examples" / "create_seed_audio.py"
+    spec = importlib.util.spec_from_file_location("create_seed_audio_example", example_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
 
-    request = real_request_body()
+    request = module.real_request_body()
 
     assert request["model"] == "doubao-seed-audio-1-0"
     assert "provider" not in request
