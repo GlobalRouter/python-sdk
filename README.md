@@ -77,6 +77,11 @@ Available native resources:
 - `client.audio`
 - `client.three_d`
 
+`tasks.create`, `tasks.create_batch`, `tasks.retry`, `videos.create`, and
+`three_d.generate` are sent once and are never automatically retried by the SDK.
+If their outcome is unknown, query the task first; any caller-initiated retry must
+reuse the same `idempotency_key` where the API supports it.
+
 ## Async
 
 Every resource includes async methods with the `_async` suffix.

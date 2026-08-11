@@ -244,6 +244,36 @@ def test_error_normalization_and_retries() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    "call",
+    (
+        lambda client: client.tasks.create(type="video_generation"),
+        lambda client: client.tasks.create_batch([{"type": "video_generation"}]),
+        lambda client: client.tasks.retry("task_1"),
+        lambda client: client.videos.create(model="video", prompt="clip"),
+        lambda client: client.three_d.generate(model="3d", prompt="mesh"),
+    ),
+)
+def test_async_task_side_effect_calls_do_not_retry(call: object) -> None:
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        return httpx.Response(500, json={"error": {"message": "temporary"}})
+
+    with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        max_retries=2,
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(GlobalRouterError):
+            call(client)  # type: ignore[operator]
+
+    assert attempts == 1
+
+
 def test_stream_error_preserves_openrouter_metadata() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/api/v1/chat/completions"

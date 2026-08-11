@@ -328,7 +328,7 @@ class ProvidersResource(BaseResource):
 
 class VideosResource(BaseResource):
     def create(self, request: Optional[Mapping[str, Any]] = None, **params: Any) -> VideoJob:
-        return self._client.request_model(
+        return self._client.request_model_once(
             "POST",
             "/api/v1/videos",
             VideoJob,
@@ -341,7 +341,7 @@ class VideosResource(BaseResource):
         request: Optional[Mapping[str, Any]] = None,
         **params: Any,
     ) -> VideoJob:
-        return await self._client.request_model_async(
+        return await self._client.request_model_once_async(
             "POST",
             "/api/v1/videos",
             VideoJob,
@@ -378,7 +378,7 @@ class VideosResource(BaseResource):
 
 class TasksResource(BaseResource):
     def create(self, request: Optional[Mapping[str, Any]] = None, **params: Any) -> Task:
-        return self._client.request_model(
+        return self._client.request_model_once(
             "POST",
             "/v1/tasks",
             Task,
@@ -391,7 +391,7 @@ class TasksResource(BaseResource):
         request: Optional[Mapping[str, Any]] = None,
         **params: Any,
     ) -> Task:
-        return await self._client.request_model_async(
+        return await self._client.request_model_once_async(
             "POST",
             "/v1/tasks",
             Task,
@@ -400,7 +400,7 @@ class TasksResource(BaseResource):
         )
 
     def create_batch(self, tasks: list[Mapping[str, Any]]) -> APIResponse:
-        return self._client.request_model(
+        return self._client.request_model_once(
             "POST",
             "/v1/tasks/batch",
             APIResponse,
@@ -408,7 +408,7 @@ class TasksResource(BaseResource):
         )
 
     async def create_batch_async(self, tasks: list[Mapping[str, Any]]) -> APIResponse:
-        return await self._client.request_model_async(
+        return await self._client.request_model_once_async(
             "POST",
             "/v1/tasks/batch",
             APIResponse,
@@ -480,10 +480,10 @@ class TasksResource(BaseResource):
         )
 
     def retry(self, task_id: str) -> Task:
-        return self._client.request_model("POST", f"/v1/tasks/{task_id}/retry", Task)
+        return self._client.request_model_once("POST", f"/v1/tasks/{task_id}/retry", Task)
 
     async def retry_async(self, task_id: str) -> Task:
-        return await self._client.request_model_async(
+        return await self._client.request_model_once_async(
             "POST",
             f"/v1/tasks/{task_id}/retry",
             Task,
@@ -560,7 +560,7 @@ class AudioResource(BaseResource):
 
 class ThreeDResource(BaseResource):
     def generate(self, request: Optional[Mapping[str, Any]] = None, **params: Any) -> APIResponse:
-        return self._client.request_model(
+        return self._client.request_model_once(
             "POST",
             "/v1/3d/generations",
             APIResponse,
@@ -572,7 +572,7 @@ class ThreeDResource(BaseResource):
         request: Optional[Mapping[str, Any]] = None,
         **params: Any,
     ) -> APIResponse:
-        return await self._client.request_model_async(
+        return await self._client.request_model_once_async(
             "POST",
             "/v1/3d/generations",
             APIResponse,
