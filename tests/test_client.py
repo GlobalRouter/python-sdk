@@ -116,7 +116,7 @@ def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatc
     assert all(request.headers["authorization"] == "Bearer sk-test-local" for request in requests)
 
 
-def test_native_surface_and_sse_streaming() -> None:
+def test_native_surface_sse_streaming_and_images() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/api/v1/chat/completions":
             assert json.loads(request.content)["stream"] is True
@@ -151,6 +151,19 @@ def test_native_surface_and_sse_streaming() -> None:
         if request.url.path == "/v1/tasks/task_1/retry":
             return httpx.Response(200, json={"id": "task_1", "status": "queued"})
         if request.url.path == "/api/v1/images":
+            assert json.loads(request.content) == {
+                "model": "gpt-image-2",
+                "prompt": "edit the character outfit",
+                "provider": {"provider_id": "ghyz"},
+                "input_references": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://assets.example.test/reference.jpg",
+                        },
+                    }
+                ],
+            }
             return httpx.Response(200, json={"data": [{"url": "https://example.test/i.png"}]})
         if request.url.path == "/api/v1/image-tasks":
             assert request.headers["idempotency-key"] == "client-image-task-001"
@@ -187,7 +200,17 @@ def test_native_surface_and_sse_streaming() -> None:
         assert list(client.tasks.events("task_1"))[0].id == "event_1"
         assert client.tasks.cancel("task_1").status == "canceled"
         assert client.tasks.retry("task_1").status == "queued"
-        assert client.images.generate(model="seedream-image", prompt="hi").data
+        assert client.images.generate(
+            model="gpt-image-2",
+            prompt="edit the character outfit",
+            provider={"provider_id": "ghyz"},
+            input_references=[
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "https://assets.example.test/reference.jpg"},
+                }
+            ],
+        ).data
         assert client.images.create_task(
             model="jimeng_t2i_v31",
             prompt="hi",
@@ -307,7 +330,7 @@ async def test_seed_audio_async_uses_same_path_body_and_response_model() -> None
     assert len(requests) == 1
 
 
-def test_images_generate_sanitizes_provider_for_create_images() -> None:
+def test_images_generate_preserves_provider_payload() -> None:
     requests: list[dict[str, Any]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -327,7 +350,7 @@ def test_images_generate_sanitizes_provider_for_create_images() -> None:
             provider={"provider_id": "doubao", "options": {"doubao": {"watermark": False}}},
         )
 
-    assert "provider" not in requests[0]
+    assert requests[0]["provider"] == "doubao"
     assert requests[1]["provider"] == {
         "provider_id": "doubao",
         "options": {"doubao": {"watermark": False}},
@@ -399,6 +422,46 @@ async def test_async_chat_and_models() -> None:
 
 
 @pytest.mark.asyncio
+async def test_async_image_generation_uses_openrouter_image_contract() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert request.url.path == "/api/v1/images"
+        assert json.loads(request.content) == {
+            "model": "gpt-image-2",
+            "prompt": "edit the character outfit",
+            "provider": {"provider_id": "ghyz"},
+            "input_references": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": "https://assets.example.test/reference.jpg",
+                    },
+                }
+            ],
+        }
+        return httpx.Response(200, json={"data": [{"b64_json": "aW1hZ2U="}]})
+
+    async with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        response = await client.images.generate_async(
+            model="gpt-image-2",
+            prompt="edit the character outfit",
+            provider={"provider_id": "ghyz"},
+            input_references=[
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "https://assets.example.test/reference.jpg"},
+                }
+            ],
+        )
+
+    assert response.data == [{"b64_json": "aW1hZ2U="}]
+
+
+@pytest.mark.asyncio
 async def test_async_streaming_error_normalization() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         return _streaming_error_response()
@@ -435,6 +498,8 @@ def test_error_normalization_and_retries() -> None:
                         "type": "rate_limit_error",
                         "router_code": "ROUTER_RATE_LIMITED",
                         "request_id": "req_1",
+                        "provider_name": "qwen",
+                        "raw_provider_error": {"code": "upstream_rate_limited"},
                     },
                 }
             },
@@ -456,6 +521,89 @@ def test_error_normalization_and_retries() -> None:
     assert exc_info.value.code == "ROUTER_RATE_LIMITED"
     assert exc_info.value.error_type == "rate_limit_error"
     assert exc_info.value.request_id == "req_1"
+    assert exc_info.value.metadata == {
+        "type": "rate_limit_error",
+        "router_code": "ROUTER_RATE_LIMITED",
+        "request_id": "req_1",
+        "provider_name": "qwen",
+        "raw_provider_error": {"code": "upstream_rate_limited"},
+    }
+
+
+@pytest.mark.parametrize(
+    "call",
+    (
+        lambda client: client.tasks.create(type="video_generation"),
+        lambda client: client.tasks.create_batch([{"type": "video_generation"}]),
+        lambda client: client.tasks.retry("task_1"),
+        lambda client: client.videos.create(model="video", prompt="clip"),
+        lambda client: client.three_d.generate(model="3d", prompt="mesh"),
+    ),
+)
+def test_async_task_side_effect_calls_do_not_retry(call: object) -> None:
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        return httpx.Response(500, json={"error": {"message": "temporary"}})
+
+    with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        max_retries=2,
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(GlobalRouterError):
+            call(client)  # type: ignore[operator]
+
+    assert attempts == 1
+
+
+def test_stream_error_preserves_openrouter_metadata() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/chat/completions"
+        return httpx.Response(
+            200,
+            content=_sse_lines(
+                [
+                    {
+                        "error": {
+                            "message": "Stream was rate limited",
+                            "code": 429,
+                            "metadata": {
+                                "type": "rate_limit_error",
+                                "router_code": "ROUTER_RATE_LIMITED",
+                                "request_id": "req_stream",
+                                "provider_name": "qwen",
+                            },
+                        }
+                    }
+                ]
+            ),
+        )
+
+    client = GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(GlobalRouterError) as exc_info:
+            list(client.chat.stream(model="mock-chat", messages=[]))
+    finally:
+        client.close()
+
+    assert exc_info.value.status_code == 429
+    assert exc_info.value.code == "ROUTER_RATE_LIMITED"
+    assert exc_info.value.error_type == "rate_limit_error"
+    assert exc_info.value.request_id == "req_stream"
+    assert exc_info.value.metadata == {
+        "type": "rate_limit_error",
+        "router_code": "ROUTER_RATE_LIMITED",
+        "request_id": "req_stream",
+        "provider_name": "qwen",
+    }
 
 
 def test_webhook_signature_verification(monkeypatch: pytest.MonkeyPatch) -> None:

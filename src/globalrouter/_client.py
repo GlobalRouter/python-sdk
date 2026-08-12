@@ -146,6 +146,36 @@ class GlobalRouter:
         )
         return model.model_validate(response.json())
 
+    def request_model_once(
+        self,
+        method: str,
+        path: str,
+        model: type[T],
+        *,
+        json_body: Optional[dict[str, Any]] = None,
+        params: Optional[dict[str, Any]] = None,
+        headers: Optional[dict[str, str]] = None,
+    ) -> T:
+        response = self.request_once(
+            method, path, json_body=json_body, params=params, headers=headers
+        )
+        return model.model_validate(response.json())
+
+    async def request_model_once_async(
+        self,
+        method: str,
+        path: str,
+        model: type[T],
+        *,
+        json_body: Optional[dict[str, Any]] = None,
+        params: Optional[dict[str, Any]] = None,
+        headers: Optional[dict[str, str]] = None,
+    ) -> T:
+        response = await self.request_once_async(
+            method, path, json_body=json_body, params=params, headers=headers
+        )
+        return model.model_validate(response.json())
+
     def request(
         self,
         method: str,
@@ -179,6 +209,22 @@ class GlobalRouter:
             raise last_error
         raise RuntimeError("GlobalRouter SDK request exhausted retries")
 
+    def request_once(
+        self,
+        method: str,
+        path: str,
+        *,
+        json_body: Optional[dict[str, Any]] = None,
+        params: Optional[dict[str, Any]] = None,
+        headers: Optional[dict[str, str]] = None,
+    ) -> httpx.Response:
+        response = self._client.request(
+            method, path, headers=self._headers(headers), json=json_body, params=_clean(params)
+        )
+        if response.status_code >= 400:
+            raise error_from_response(response)
+        return response
+
     async def request_async(
         self,
         method: str,
@@ -211,6 +257,22 @@ class GlobalRouter:
         if last_error is not None:
             raise last_error
         raise RuntimeError("GlobalRouter SDK request exhausted retries")
+
+    async def request_once_async(
+        self,
+        method: str,
+        path: str,
+        *,
+        json_body: Optional[dict[str, Any]] = None,
+        params: Optional[dict[str, Any]] = None,
+        headers: Optional[dict[str, str]] = None,
+    ) -> httpx.Response:
+        response = await self._async_client.request(
+            method, path, headers=self._headers(headers), json=json_body, params=_clean(params)
+        )
+        if response.status_code >= 400:
+            raise error_from_response(response)
+        return response
 
     def stream(
         self,

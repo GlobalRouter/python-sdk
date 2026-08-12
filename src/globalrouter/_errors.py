@@ -14,6 +14,7 @@ class GlobalRouterError(Exception):
         message: str,
         error_type: str,
         request_id: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
         response: Optional[httpx.Response] = None,
     ) -> None:
         super().__init__(message)
@@ -22,6 +23,7 @@ class GlobalRouterError(Exception):
         self.message = message
         self.error_type = error_type
         self.request_id = request_id
+        self.metadata = dict(metadata or {})
         self.response = response
 
 
@@ -33,9 +35,7 @@ def error_from_response(response: httpx.Response) -> GlobalRouterError:
         body = {}
 
     error = body.get("error", {}) if isinstance(body, dict) else {}
-    metadata = error.get("metadata", {}) if isinstance(error, dict) else {}
-    if not isinstance(metadata, dict):
-        metadata = {}
+    metadata = _error_metadata(error)
 
     message = _string(error.get("message")) or response.text or "GlobalRouter request failed"
     code = (
@@ -52,6 +52,7 @@ def error_from_response(response: httpx.Response) -> GlobalRouterError:
         message=message,
         error_type=error_type,
         request_id=request_id,
+        metadata=metadata,
         response=response,
     )
 
@@ -60,9 +61,7 @@ def error_from_stream_payload(payload: dict[str, Any]) -> GlobalRouterError:
     error = payload.get("error", {})
     if not isinstance(error, dict):
         error = {}
-    metadata = error.get("metadata", {})
-    if not isinstance(metadata, dict):
-        metadata = {}
+    metadata = _error_metadata(error)
     error_code = error.get("code")
     return GlobalRouterError(
         status_code=_status_code_from_stream_code(error_code),
@@ -74,8 +73,16 @@ def error_from_stream_payload(payload: dict[str, Any]) -> GlobalRouterError:
         message=_string(error.get("message")) or "GlobalRouter stream failed",
         error_type=_string(metadata.get("type")) or _string(error.get("type")) or "router_error",
         request_id=_string(metadata.get("request_id")) or _string(error.get("request_id")),
+        metadata=metadata,
         response=None,
     )
+
+
+def _error_metadata(error: Any) -> dict[str, Any]:
+    metadata = error.get("metadata", {}) if isinstance(error, dict) else {}
+    if not isinstance(metadata, dict):
+        return {}
+    return dict(metadata)
 
 
 def _status_code_from_stream_code(value: Any) -> int:
