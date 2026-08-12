@@ -1,15 +1,30 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 from collections.abc import Iterator
 from hashlib import sha256
 from hmac import new as hmac_new
+from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
+from pydantic import BaseModel
 
 from globalrouter import GlobalRouter, GlobalRouterError
+from globalrouter._streaming import aiter_sse_models, iter_sse_models
+
+
+class SSEItem(BaseModel):
+    id: str
+
+
+def test_default_base_url_uses_production_api_domain(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GLOBALROUTER_API_KEY", "sk-test-local")
+
+    with GlobalRouter() as client:
+        assert client.base_url == "https://api.globalrouter.com"
 
 
 def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,6 +165,18 @@ def test_native_surface_sse_streaming_and_images() -> None:
                 ],
             }
             return httpx.Response(200, json={"data": [{"url": "https://example.test/i.png"}]})
+        if request.url.path == "/api/v1/image-tasks":
+            assert request.headers["idempotency-key"] == "client-image-task-001"
+            assert "idempotency_key" not in json.loads(request.content)
+            return httpx.Response(
+                200,
+                json={
+                    "id": "imgtask_1",
+                    "object": "image.task",
+                    "status": "queued",
+                    "model": "jimeng_t2i_v31",
+                },
+            )
         if request.url.path == "/v1/audio/speech":
             return httpx.Response(200, json={"data": [{"url": "https://example.test/a.mp3"}]})
         if request.url.path == "/v1/audio/transcriptions":
@@ -184,11 +211,188 @@ def test_native_surface_sse_streaming_and_images() -> None:
                 }
             ],
         ).data
+        assert client.images.create_task(
+            model="jimeng_t2i_v31",
+            prompt="hi",
+            idempotency_key="client-image-task-001",
+        ).id == "imgtask_1"
         assert client.audio.speech(model="tts", input="hi").data
         assert client.audio.transcription(model="asr", file_url="https://a.test").text == "hello"
         assert client.three_d.generate(model="tripo-3d", prompt="mesh").id == "task_3d"
     finally:
         client.close()
+
+
+def test_seed_audio_sync_uses_gr_auth_mapping_payload_and_typed_response() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.method == "POST"
+        assert request.url.path == "/doubao/api/v3/tts/create"
+        assert request.headers["authorization"] == "Bearer sk-test-local"
+        assert "x-api-key" not in request.headers
+        assert json.loads(request.content) == {
+            "model": "doubao-seed-audio-1-0",
+            "text_prompt": "A quiet piano solo",
+            "audio_config": {"format": "mp3", "future_official_field": True},
+        }
+        return httpx.Response(
+            200,
+            json={
+                "code": 0,
+                "message": "success",
+                "audio": "base64-audio",
+                "duration": 1.2,
+                "original_duration": 1.5,
+                "url": "https://cdn.example/audio.mp3",
+                "subtitle": {
+                    "text": "piano",
+                    "sentences": [
+                        {
+                            "text": "piano",
+                            "start_time": 0,
+                            "end_time": 1500,
+                            "words": [
+                                {"text": "piano", "start_time": 0, "end_time": 1500}
+                            ],
+                        }
+                    ],
+                },
+                "future_response_field": "preserved",
+            },
+        )
+
+    with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        response = client.audio.seed_audio(
+            {
+                "model": "doubao-seed-audio-1-0",
+                "text_prompt": "A quiet piano solo",
+                "audio_config": {"format": "mp3", "future_official_field": True},
+            }
+        )
+
+    assert response.audio == "base64-audio"
+    assert response.original_duration == 1.5
+    assert response.subtitle is not None
+    assert response.subtitle.sentences[0].words[0].text == "piano"
+    assert response.future_response_field == "preserved"
+    assert len(requests) == 1
+
+
+def test_seed_audio_real_example_uses_server_selected_provider() -> None:
+    example_path = Path(__file__).parents[1] / "examples" / "create_seed_audio.py"
+    spec = importlib.util.spec_from_file_location("create_seed_audio_example", example_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    request = module.real_request_body()
+
+    assert request["model"] == "doubao-seed-audio-1-0"
+    assert "provider" not in request
+    assert "references" not in request
+
+
+@pytest.mark.asyncio
+async def test_seed_audio_async_uses_same_path_body_and_response_model() -> None:
+    requests: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.url.path == "/doubao/api/v3/tts/create"
+        assert request.headers["authorization"] == "Bearer sk-test-local"
+        assert "x-api-key" not in request.headers
+        assert json.loads(request.content) == {
+            "model": "doubao-seed-audio-1-0",
+            "text_prompt": "A quiet piano solo",
+            "watermark": {"aigc_watermark": False},
+        }
+        return httpx.Response(200, json={"audio": "async-base64", "original_duration": 2.5})
+
+    async with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        response = await client.audio.seed_audio_async(
+            model="doubao-seed-audio-1-0",
+            text_prompt="A quiet piano solo",
+            watermark={"aigc_watermark": False},
+        )
+
+    assert response.audio == "async-base64"
+    assert response.original_duration == 2.5
+    assert len(requests) == 1
+
+
+def test_images_generate_preserves_provider_payload() -> None:
+    requests: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/images"
+        requests.append(json.loads(request.content))
+        return httpx.Response(200, json={"data": [{"b64_json": "AAAA"}]})
+
+    with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        client.images.generate(model="seedream-image", prompt="hi", provider="doubao")
+        client.images.generate(
+            model="seedream-image",
+            prompt="hi",
+            provider={"provider_id": "doubao", "options": {"doubao": {"watermark": False}}},
+        )
+
+    assert requests[0]["provider"] == "doubao"
+    assert requests[1]["provider"] == {
+        "provider_id": "doubao",
+        "options": {"doubao": {"watermark": False}},
+    }
+
+
+def test_chat_stream_error_frame_preserves_string_code() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/chat/completions"
+        assert json.loads(request.content)["stream"] is True
+        return httpx.Response(
+            200,
+            content=_sse_lines(
+                [
+                    {
+                        "error": {
+                            "code": "ROUTER_RATE_LIMITED",
+                            "message": "limited",
+                            "type": "rate_limit_error",
+                            "request_id": "req_stream_1",
+                        }
+                    }
+                ]
+            ),
+        )
+
+    client = GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(GlobalRouterError) as exc_info:
+            list(client.chat.stream(model="mock-chat", messages=[]))
+    finally:
+        client.close()
+
+    assert exc_info.value.status_code == 0
+    assert exc_info.value.code == "ROUTER_RATE_LIMITED"
+    assert exc_info.value.message == "limited"
+    assert exc_info.value.error_type == "rate_limit_error"
+    assert exc_info.value.request_id == "req_stream_1"
 
 
 @pytest.mark.asyncio
@@ -255,6 +459,25 @@ async def test_async_image_generation_uses_openrouter_image_contract() -> None:
         )
 
     assert response.data == [{"b64_json": "aW1hZ2U="}]
+
+
+@pytest.mark.asyncio
+async def test_async_streaming_error_normalization() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return _streaming_error_response()
+
+    async with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(GlobalRouterError) as exc_info:
+            [item async for item in client.chat.stream_async(model="mock-chat", messages=[])]
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.message == "Unauthorized"
+    assert exc_info.value.code == "AUTH_REQUIRED"
+    assert exc_info.value.request_id == "req_stream_1"
 
 
 def test_error_normalization_and_retries() -> None:
@@ -383,18 +606,113 @@ def test_stream_error_preserves_openrouter_metadata() -> None:
     }
 
 
-def test_webhook_signature_verification() -> None:
+def test_webhook_signature_verification(monkeypatch: pytest.MonkeyPatch) -> None:
     payload = b'{"event":"task.succeeded"}'
     legacy = "sha256=0f2d86d81b7a8c4d936d190496d299da981be5857b083120430ea9b01e6d99f7"
     timestamp = "1778413678"
     digest = hmac_new(b"secret", timestamp.encode() + b"." + payload, sha256).hexdigest()
+    monkeypatch.setattr("globalrouter._webhooks.time.time", lambda: int(timestamp) + 60)
 
     assert GlobalRouter.verify_webhook_signature("secret", payload, legacy) is True
     assert GlobalRouter.verify_webhook_signature("secret", payload, f"t={timestamp},v1={digest}")
     assert GlobalRouter.verify_webhook_signature("secret", payload, "sha256=bad") is False
 
 
+def test_sse_parser_buffers_split_data_fields() -> None:
+    response = httpx.Response(
+        200,
+        content=b'data: {"id": "split"\ndata: }\n\n',
+    )
+
+    assert list(iter_sse_models(response, SSEItem)) == [SSEItem(id="split")]
+
+
+@pytest.mark.asyncio
+async def test_async_sse_parser_buffers_split_data_fields() -> None:
+    response = httpx.Response(
+        200,
+        content=b'data: {"id": "split"\ndata: }\n\n',
+    )
+
+    assert [item async for item in aiter_sse_models(response, SSEItem)] == [SSEItem(id="split")]
+
+
+def test_stream_retries_5xx_before_returning_response() -> None:
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return httpx.Response(500, content=b'{"error":{"message":"temp"}}')
+        return httpx.Response(200, content=b'data: {"id": "retry_ok"}\n\ndata: [DONE]\n\n')
+
+    client = GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        max_retries=1,
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        response = client.stream("POST", "/api/v1/chat/completions", json_body={"stream": True})
+        assert list(iter_sse_models(response, SSEItem)) == [SSEItem(id="retry_ok")]
+    finally:
+        client.close()
+
+    assert attempts == 2
+
+
+@pytest.mark.asyncio
+async def test_async_stream_retries_5xx_before_returning_response() -> None:
+    attempts = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return httpx.Response(500, content=b'{"error":{"message":"temp"}}')
+        return httpx.Response(200, content=b'data: {"id": "retry_ok"}\n\ndata: [DONE]\n\n')
+
+    async with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        max_retries=1,
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        response = await client.stream_async(
+            "POST",
+            "/api/v1/chat/completions",
+            json_body={"stream": True},
+        )
+        assert [item async for item in aiter_sse_models(response, SSEItem)] == [
+            SSEItem(id="retry_ok")
+        ]
+
+    assert attempts == 2
+
+
 def _sse_lines(items: list[dict[str, Any] | str]) -> Iterator[bytes]:
     for item in items:
         payload = item if isinstance(item, str) else json.dumps(item)
         yield f"data: {payload}\n\n".encode()
+
+
+def _streaming_error_response() -> httpx.Response:
+    return httpx.Response(
+        401,
+        stream=httpx.ByteStream(
+            json.dumps(
+                {
+                    "error": {
+                        "message": "Unauthorized",
+                        "code": "unauthorized",
+                        "metadata": {
+                            "type": "authentication_error",
+                            "router_code": "AUTH_REQUIRED",
+                            "request_id": "req_stream_1",
+                        },
+                    }
+                }
+            ).encode()
+        ),
+    )

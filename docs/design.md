@@ -37,7 +37,7 @@ The SDK uses `httpx.Client` and `httpx.AsyncClient` internally.
 
 Defaults:
 
-- `base_url`: `https://api.globalrouter.ai`
+- `base_url`: `https://api.globalrouter.com`
 - `timeout_seconds`: `30`
 - `max_retries`: `2`
 - `api_key`: explicit argument or `GLOBALROUTER_API_KEY`

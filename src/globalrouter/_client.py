@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import os
+import threading
 from time import sleep
 from typing import Any, Optional, TypeVar, cast
 
@@ -25,7 +27,10 @@ from globalrouter._resources import (
     ThreeDResource,
     VideosResource,
 )
-from globalrouter._webhooks import verify_webhook_signature
+from globalrouter._webhooks import (
+    DEFAULT_WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS,
+    verify_webhook_signature,
+)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -35,7 +40,7 @@ class GlobalRouter:
         self,
         *,
         api_key: Optional[str] = None,
-        base_url: str = "https://api.globalrouter.ai",
+        base_url: str = "https://api.globalrouter.com",
         timeout_seconds: float = 30,
         max_retries: int = 2,
         transport: Optional[httpx.BaseTransport] = None,
@@ -76,8 +81,10 @@ class GlobalRouter:
 
     def close(self) -> None:
         self._client.close()
+        _close_async_client(self._async_client)
 
     async def aclose(self) -> None:
+        self._client.close()
         await self._async_client.aclose()
 
     def __enter__(self) -> "GlobalRouter":
@@ -93,8 +100,19 @@ class GlobalRouter:
         await self.aclose()
 
     @staticmethod
-    def verify_webhook_signature(secret: str, payload: bytes, signature: str) -> bool:
-        return verify_webhook_signature(secret, payload, signature)
+    def verify_webhook_signature(
+        secret: str,
+        payload: bytes,
+        signature: str,
+        *,
+        timestamp_tolerance_seconds: int | None = DEFAULT_WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS,
+    ) -> bool:
+        return verify_webhook_signature(
+            secret,
+            payload,
+            signature,
+            timestamp_tolerance_seconds=timestamp_tolerance_seconds,
+        )
 
     def request_model(
         self,
@@ -264,19 +282,26 @@ class GlobalRouter:
         json_body: Optional[dict[str, Any]] = None,
         headers: Optional[dict[str, str]] = None,
     ) -> httpx.Response:
-        response = self._client.build_request(
-            method,
-            path,
-            headers=self._headers(headers),
-            json=json_body,
-        )
-        result = self._client.send(response, stream=True)
-        if result.status_code >= 400:
-            try:
-                raise error_from_response(result)
-            finally:
+        for attempt in range(self.max_retries + 1):
+            response = self._client.build_request(
+                method,
+                path,
+                headers=self._headers(headers),
+                json=json_body,
+            )
+            result = self._client.send(response, stream=True)
+            if result.status_code >= 500 and attempt < self.max_retries:
                 result.close()
-        return result
+                self._sleep_before_retry(attempt)
+                continue
+            if result.status_code >= 400:
+                try:
+                    result.read()
+                    raise error_from_response(result)
+                finally:
+                    result.close()
+            return result
+        raise RuntimeError("GlobalRouter SDK stream request exhausted retries")
 
     async def stream_async(
         self,
@@ -286,19 +311,26 @@ class GlobalRouter:
         json_body: Optional[dict[str, Any]] = None,
         headers: Optional[dict[str, str]] = None,
     ) -> httpx.Response:
-        request = self._async_client.build_request(
-            method,
-            path,
-            headers=self._headers(headers),
-            json=json_body,
-        )
-        result = await self._async_client.send(request, stream=True)
-        if result.status_code >= 400:
-            try:
-                raise error_from_response(result)
-            finally:
+        for attempt in range(self.max_retries + 1):
+            request = self._async_client.build_request(
+                method,
+                path,
+                headers=self._headers(headers),
+                json=json_body,
+            )
+            result = await self._async_client.send(request, stream=True)
+            if result.status_code >= 500 and attempt < self.max_retries:
                 await result.aclose()
-        return result
+                await self._async_sleep_before_retry(attempt)
+                continue
+            if result.status_code >= 400:
+                try:
+                    await result.aread()
+                    raise error_from_response(result)
+                finally:
+                    await result.aclose()
+            return result
+        raise RuntimeError("GlobalRouter SDK async stream request exhausted retries")
 
     def _headers(self, extra: Optional[dict[str, str]] = None) -> dict[str, str]:
         headers = {
@@ -332,7 +364,11 @@ def payload_from_mapping(request: Optional[dict[str, Any]], params: dict[str, An
 def _clean(params: Optional[dict[str, Any]]) -> Optional[dict[str, str]]:
     if params is None:
         return None
-    return {key: str(value) for key, value in params.items() if value is not None}
+    return {
+        key: ("true" if value else "false") if isinstance(value, bool) else str(value)
+        for key, value in params.items()
+        if value is not None
+    }
 
 
 def _ensure_error_type(_: GlobalRouterError) -> None:
@@ -341,3 +377,28 @@ def _ensure_error_type(_: GlobalRouterError) -> None:
 
 def _cast_json_dict(value: Any) -> JSONDict:
     return cast(JSONDict, value)
+
+
+def _close_async_client(client: httpx.AsyncClient) -> None:
+    if client.is_closed:
+        return
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(client.aclose())
+        return
+
+    error: Optional[BaseException] = None
+
+    def close_in_thread() -> None:
+        nonlocal error
+        try:
+            asyncio.run(client.aclose())
+        except BaseException as exc:
+            error = exc
+
+    thread = threading.Thread(target=close_in_thread)
+    thread.start()
+    thread.join()
+    if error is not None:
+        raise error

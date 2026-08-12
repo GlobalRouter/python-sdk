@@ -11,6 +11,7 @@ from globalrouter._models import (
     DeletedObject,
     JSONDict,
     ModelList,
+    SeedAudioResponse,
     Task,
     VideoJob,
 )
@@ -30,6 +31,17 @@ class BaseResource:
             payload.update(dict(request))
         payload.update({key: value for key, value in params.items() if value is not None})
         return payload
+
+    def _payload_without_params(
+        self,
+        request: Optional[Mapping[str, Any]],
+        params: dict[str, Any],
+        excluded: set[str],
+    ) -> JSONDict:
+        return self._payload(
+            request,
+            {key: value for key, value in params.items() if key not in excluded},
+        )
 
 
 class ChatResource(BaseResource):
@@ -332,7 +344,7 @@ class VideosResource(BaseResource):
             "POST",
             "/api/v1/videos",
             VideoJob,
-            json_body=self._payload(request, params),
+            json_body=self._payload_without_params(request, params, {"idempotency_key"}),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -345,7 +357,7 @@ class VideosResource(BaseResource):
             "POST",
             "/api/v1/videos",
             VideoJob,
-            json_body=self._payload(request, params),
+            json_body=self._payload_without_params(request, params, {"idempotency_key"}),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -382,7 +394,7 @@ class TasksResource(BaseResource):
             "POST",
             "/v1/tasks",
             Task,
-            json_body=self._payload(request, params),
+            json_body=self._payload_without_params(request, params, {"idempotency_key"}),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -395,7 +407,7 @@ class TasksResource(BaseResource):
             "POST",
             "/v1/tasks",
             Task,
-            json_body=self._payload(request, params),
+            json_body=self._payload_without_params(request, params, {"idempotency_key"}),
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
@@ -511,6 +523,46 @@ class ImagesResource(BaseResource):
             json_body=self._payload(request, params),
         )
 
+    def create_task(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> APIResponse:
+        return self._client.request_model(
+            "POST",
+            "/api/v1/image-tasks",
+            APIResponse,
+            json_body=self._payload_without_params(request, params, {"idempotency_key"}),
+            headers=_idempotency_header(params.get("idempotency_key")),
+        )
+
+    async def create_task_async(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> APIResponse:
+        return await self._client.request_model_async(
+            "POST",
+            "/api/v1/image-tasks",
+            APIResponse,
+            json_body=self._payload_without_params(request, params, {"idempotency_key"}),
+            headers=_idempotency_header(params.get("idempotency_key")),
+        )
+
+    def get_task(self, image_task_id: str) -> APIResponse:
+        return self._client.request_model(
+            "GET",
+            f"/api/v1/image-tasks/{image_task_id}",
+            APIResponse,
+        )
+
+    async def get_task_async(self, image_task_id: str) -> APIResponse:
+        return await self._client.request_model_async(
+            "GET",
+            f"/api/v1/image-tasks/{image_task_id}",
+            APIResponse,
+        )
+
 
 class AudioResource(BaseResource):
     def speech(self, request: Optional[Mapping[str, Any]] = None, **params: Any) -> APIResponse:
@@ -554,6 +606,30 @@ class AudioResource(BaseResource):
             "POST",
             "/v1/audio/transcriptions",
             APIResponse,
+            json_body=self._payload(request, params),
+        )
+
+    def seed_audio(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> SeedAudioResponse:
+        return self._client.request_model(
+            "POST",
+            "/doubao/api/v3/tts/create",
+            SeedAudioResponse,
+            json_body=self._payload(request, params),
+        )
+
+    async def seed_audio_async(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> SeedAudioResponse:
+        return await self._client.request_model_async(
+            "POST",
+            "/doubao/api/v3/tts/create",
+            SeedAudioResponse,
             json_body=self._payload(request, params),
         )
 

@@ -93,18 +93,51 @@ task = client.tasks.create(
 
 for event in client.tasks.events(task.id):
     print(event)
+
+image_task = client.images.create_task(
+    model="jimeng_t2i_v31",
+    prompt="a calm dashboard",
+)
+image_task = client.images.get_task(image_task.id)
 ```
 
 Available native resources:
 
 - `client.tasks`
+- `client.images`
+  - `client.images.create_task`
+  - `client.images.get_task`
 - `client.audio`
+  - `client.audio.seed_audio(...)`
+  - `await client.audio.seed_audio_async(...)`
 - `client.three_d`
 
 `tasks.create`, `tasks.create_batch`, `tasks.retry`, `videos.create`, and
 `three_d.generate` are sent once and are never automatically retried by the SDK.
 If their outcome is unknown, query the task first; any caller-initiated retry must
 reuse the same `idempotency_key` where the API supports it.
+
+## Doubao SeedAudio
+
+```python
+response = client.audio.seed_audio(
+    {
+        "model": "doubao-seed-audio-1-0",
+        "text_prompt": "Use @音频1 as a style reference for a calm piano passage",
+        "references": [{"audio_url": "https://example.com/reference.mp3"}],
+        "audio_config": {"format": "mp3", "enable_subtitle": True},
+        "watermark": {"aigc_watermark": False},
+    }
+)
+print(response.url, response.original_duration)
+```
+
+`seed_audio` and `seed_audio_async` send `POST /doubao/api/v3/tts/create`.
+The request accepts any `Mapping`, so new official SeedAudio fields can be
+used without waiting for an SDK release. Configure only the GlobalRouter API
+key; do not send a Volcengine `X-Api-Key`. GlobalRouter selects the dedicated
+`doubao_audio` provider and its upstream credential on the server, so the SDK
+does not send a `provider` field.
 
 ## Async
 
@@ -125,7 +158,7 @@ async with GlobalRouter() as client:
 ```python
 client = GlobalRouter(
     api_key="sk-...",
-    base_url="https://api.globalrouter.ai",
+    base_url="https://api.globalrouter.com",
     timeout_seconds=30,
     max_retries=2,
 )
