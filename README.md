@@ -42,6 +42,29 @@ credits = client.credits.get()
 providers = client.providers.list()
 ```
 
+### Image generation
+
+`client.images` uses the `/api/v1/images` contract. Image-generation parameters are
+sent unchanged, including provider selection and reference images.
+
+```python
+reference_url = "https://assets.example.test/reference.jpg"
+
+image = client.images.generate(
+    model="gpt-image-2",
+    prompt="Edit the character outfit while preserving facial features.",
+    n=1,
+    size="1792x1024",
+    provider={"provider_id": "ghyz"},
+    input_references=[
+        {
+            "type": "image_url",
+            "image_url": {"url": reference_url},
+        }
+    ],
+)
+```
+
 Available OpenRouter-compatible resources:
 
 - `client.chat`
@@ -54,10 +77,12 @@ Available OpenRouter-compatible resources:
 - `client.keys`
 - `client.providers`
 - `client.videos`
+- `client.images`
 
 ## Native GlobalRouter Surface
 
-Native resources use GlobalRouter's `/v1/*` APIs for tasks and multimodal generation.
+Native resources use GlobalRouter's `/v1/*` APIs for tasks and resource-specific
+multimodal generation.
 
 ```python
 task = client.tasks.create(
@@ -73,7 +98,6 @@ for event in client.tasks.events(task.id):
 Available native resources:
 
 - `client.tasks`
-- `client.images`
 - `client.audio`
 - `client.three_d`
 

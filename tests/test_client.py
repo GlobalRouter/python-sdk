@@ -101,7 +101,7 @@ def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatc
     assert all(request.headers["authorization"] == "Bearer sk-test-local" for request in requests)
 
 
-def test_native_surface_and_sse_streaming() -> None:
+def test_native_surface_sse_streaming_and_images() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/api/v1/chat/completions":
             assert json.loads(request.content)["stream"] is True
@@ -135,7 +135,20 @@ def test_native_surface_and_sse_streaming() -> None:
             return httpx.Response(200, json={"id": "task_1", "status": "canceled"})
         if request.url.path == "/v1/tasks/task_1/retry":
             return httpx.Response(200, json={"id": "task_1", "status": "queued"})
-        if request.url.path == "/v1/images/generations":
+        if request.url.path == "/api/v1/images":
+            assert json.loads(request.content) == {
+                "model": "gpt-image-2",
+                "prompt": "edit the character outfit",
+                "provider": {"provider_id": "ghyz"},
+                "input_references": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://assets.example.test/reference.jpg",
+                        },
+                    }
+                ],
+            }
             return httpx.Response(200, json={"data": [{"url": "https://example.test/i.png"}]})
         if request.url.path == "/v1/audio/speech":
             return httpx.Response(200, json={"data": [{"url": "https://example.test/a.mp3"}]})
@@ -160,7 +173,17 @@ def test_native_surface_and_sse_streaming() -> None:
         assert list(client.tasks.events("task_1"))[0].id == "event_1"
         assert client.tasks.cancel("task_1").status == "canceled"
         assert client.tasks.retry("task_1").status == "queued"
-        assert client.images.generate(model="seedream-image", prompt="hi").data
+        assert client.images.generate(
+            model="gpt-image-2",
+            prompt="edit the character outfit",
+            provider={"provider_id": "ghyz"},
+            input_references=[
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "https://assets.example.test/reference.jpg"},
+                }
+            ],
+        ).data
         assert client.audio.speech(model="tts", input="hi").data
         assert client.audio.transcription(model="asr", file_url="https://a.test").text == "hello"
         assert client.three_d.generate(model="tripo-3d", prompt="mesh").id == "task_3d"
@@ -192,6 +215,46 @@ async def test_async_chat_and_models() -> None:
     ) as client:
         assert (await client.chat.send_async(model="mock-chat", messages=[])).id == "chat_async"
         assert (await client.models.list_async()).data[0]["id"] == "mock-chat"
+
+
+@pytest.mark.asyncio
+async def test_async_image_generation_uses_openrouter_image_contract() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert request.url.path == "/api/v1/images"
+        assert json.loads(request.content) == {
+            "model": "gpt-image-2",
+            "prompt": "edit the character outfit",
+            "provider": {"provider_id": "ghyz"},
+            "input_references": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": "https://assets.example.test/reference.jpg",
+                    },
+                }
+            ],
+        }
+        return httpx.Response(200, json={"data": [{"b64_json": "aW1hZ2U="}]})
+
+    async with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        response = await client.images.generate_async(
+            model="gpt-image-2",
+            prompt="edit the character outfit",
+            provider={"provider_id": "ghyz"},
+            input_references=[
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "https://assets.example.test/reference.jpg"},
+                }
+            ],
+        )
+
+    assert response.data == [{"b64_json": "aW1hZ2U="}]
 
 
 def test_error_normalization_and_retries() -> None:

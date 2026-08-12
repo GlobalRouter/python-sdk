@@ -494,7 +494,7 @@ class ImagesResource(BaseResource):
     def generate(self, request: Optional[Mapping[str, Any]] = None, **params: Any) -> APIResponse:
         return self._client.request_model(
             "POST",
-            "/v1/images/generations",
+            "/api/v1/images",
             APIResponse,
             json_body=self._payload(request, params),
         )
@@ -506,7 +506,7 @@ class ImagesResource(BaseResource):
     ) -> APIResponse:
         return await self._client.request_model_async(
             "POST",
-            "/v1/images/generations",
+            "/api/v1/images",
             APIResponse,
             json_body=self._payload(request, params),
         )
