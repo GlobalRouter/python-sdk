@@ -27,6 +27,14 @@ class GlobalRouterError(Exception):
         self.response = response
 
 
+def has_error_envelope(response: httpx.Response) -> bool:
+    try:
+        body: Any = response.json()
+    except ValueError:
+        return False
+    return isinstance(body, dict) and isinstance(body.get("error"), dict)
+
+
 def error_from_response(response: httpx.Response) -> GlobalRouterError:
     body: Any
     try:
@@ -47,7 +55,7 @@ def error_from_response(response: httpx.Response) -> GlobalRouterError:
     request_id = _string(metadata.get("request_id")) or _string(error.get("request_id"))
 
     return GlobalRouterError(
-        status_code=response.status_code,
+        status_code=_original_status_code(metadata, response.status_code),
         code=code,
         message=message,
         error_type=error_type,
@@ -96,6 +104,22 @@ def _status_code_from_stream_code(value: Any) -> int:
         except ValueError:
             return 0
     return 0
+
+
+def _original_status_code(metadata: dict[str, Any], fallback: int) -> int:
+    value = metadata.get("original_status_code")
+    if isinstance(value, bool) or value is None:
+        return fallback
+    if isinstance(value, int):
+        status_code = value
+    elif isinstance(value, str):
+        try:
+            status_code = int(value)
+        except ValueError:
+            return fallback
+    else:
+        return fallback
+    return status_code if 100 <= status_code <= 599 else fallback
 
 
 def _string(value: Any) -> Optional[str]:

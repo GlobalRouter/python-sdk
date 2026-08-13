@@ -9,7 +9,7 @@ from typing import Any, Optional, TypeVar, cast
 import httpx
 from pydantic import BaseModel
 
-from globalrouter._errors import GlobalRouterError, error_from_response
+from globalrouter._errors import GlobalRouterError, error_from_response, has_error_envelope
 from globalrouter._models import JSONDict
 from globalrouter._resources import (
     AudioResource,
@@ -202,7 +202,7 @@ class GlobalRouter:
             if response.status_code >= 500 and attempt < self.max_retries:
                 self._sleep_before_retry(attempt)
                 continue
-            if response.status_code >= 400:
+            if response.status_code >= 400 or has_error_envelope(response):
                 raise error_from_response(response)
             return response
         if last_error is not None:
@@ -221,7 +221,7 @@ class GlobalRouter:
         response = self._client.request(
             method, path, headers=self._headers(headers), json=json_body, params=_clean(params)
         )
-        if response.status_code >= 400:
+        if response.status_code >= 400 or has_error_envelope(response):
             raise error_from_response(response)
         return response
 
@@ -251,7 +251,7 @@ class GlobalRouter:
             if response.status_code >= 500 and attempt < self.max_retries:
                 await self._async_sleep_before_retry(attempt)
                 continue
-            if response.status_code >= 400:
+            if response.status_code >= 400 or has_error_envelope(response):
                 raise error_from_response(response)
             return response
         if last_error is not None:
@@ -270,7 +270,7 @@ class GlobalRouter:
         response = await self._async_client.request(
             method, path, headers=self._headers(headers), json=json_body, params=_clean(params)
         )
-        if response.status_code >= 400:
+        if response.status_code >= 400 or has_error_envelope(response):
             raise error_from_response(response)
         return response
 
