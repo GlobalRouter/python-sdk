@@ -530,6 +530,79 @@ def test_error_normalization_and_retries() -> None:
     }
 
 
+def test_image_generation_raises_for_http_200_error_envelope() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/images"
+        return httpx.Response(
+            200,
+            json={
+                "error": {
+                    "message": "Request validation failed",
+                    "code": 422,
+                    "metadata": {
+                        "type": "invalid_request_error",
+                        "router_code": "ROUTER_VALIDATION_ERROR",
+                        "request_id": "req_image_validation",
+                        "original_status_code": 422,
+                    },
+                }
+            },
+        )
+
+    with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(GlobalRouterError) as exc_info:
+            client.images.generate(model="gpt-image-2", prompt="generate an image")
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.code == "ROUTER_VALIDATION_ERROR"
+    assert exc_info.value.error_type == "invalid_request_error"
+    assert exc_info.value.request_id == "req_image_validation"
+    assert exc_info.value.metadata["original_status_code"] == 422
+    assert exc_info.value.response is not None
+    assert exc_info.value.response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_async_image_generation_raises_for_http_200_error_envelope() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/images"
+        return httpx.Response(
+            200,
+            json={
+                "error": {
+                    "message": "Request validation failed",
+                    "code": 422,
+                    "metadata": {
+                        "type": "invalid_request_error",
+                        "router_code": "ROUTER_VALIDATION_ERROR",
+                        "request_id": "req_async_image_validation",
+                        "original_status_code": 422,
+                    },
+                }
+            },
+        )
+
+    async with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(GlobalRouterError) as exc_info:
+            await client.images.generate_async(model="gpt-image-2", prompt="generate an image")
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.code == "ROUTER_VALIDATION_ERROR"
+    assert exc_info.value.error_type == "invalid_request_error"
+    assert exc_info.value.request_id == "req_async_image_validation"
+    assert exc_info.value.metadata["original_status_code"] == 422
+    assert exc_info.value.response is not None
+    assert exc_info.value.response.status_code == 200
+
+
 @pytest.mark.parametrize(
     "call",
     (
