@@ -349,6 +349,30 @@ class VideosResource(BaseResource):
             headers=_idempotency_header(params.get("idempotency_key")),
         )
 
+    def super_resolution(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> VideoJob:
+        return self._client.request_model_once(
+            "POST",
+            "/api/v1/videos/super-resolution",
+            VideoJob,
+            json_body=self._payload(request, params),
+        )
+
+    async def super_resolution_async(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> VideoJob:
+        return await self._client.request_model_once_async(
+            "POST",
+            "/api/v1/videos/super-resolution",
+            VideoJob,
+            json_body=self._payload(request, params),
+        )
+
     def get(self, job_id: str) -> VideoJob:
         return self._client.request_model("GET", f"/api/v1/videos/{job_id}", VideoJob)
 

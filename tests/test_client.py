@@ -64,6 +64,16 @@ def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatc
                 202,
                 json={"id": "task_video", "object": "video.generation", "status": "queued"},
             )
+        if request.url.path == "/api/v1/videos/super-resolution":
+            payload = json.loads(request.content)
+            assert payload == {
+                "video_url": "https://example.test/source.mp4",
+                "resolution": "1080p",
+            }
+            return httpx.Response(
+                202,
+                json={"id": "task_sr", "object": "video.generation", "status": "in_progress"},
+            )
         if request.url.path == "/api/v1/videos/task_video":
             return httpx.Response(
                 200,
@@ -93,6 +103,10 @@ def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatc
         assert c.keys.delete("key_2").deleted is True
         assert c.providers.list().data[0]["id"] == "doubao"
         assert c.videos.create(model="seedance-video", prompt="demo", idempotency_key="idem_1").id
+        assert c.videos.super_resolution(
+            video_url="https://example.test/source.mp4",
+            resolution="1080p",
+        ).id == "task_sr"
         assert c.videos.get("task_video").status == "completed"
         assert c.videos.content("task_video").data[0]["url"]
         assert c.videos.models().data[0]["id"] == "seedance-video"
