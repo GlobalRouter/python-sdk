@@ -19,6 +19,9 @@ def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatc
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
         if request.url.path == "/api/v1/chat/completions":
+            payload = json.loads(request.content)
+            assert payload["max_completion_tokens"] == 512
+            assert payload["reasoning"] == {"enabled": True, "exclude": True}
             return httpx.Response(
                 200,
                 json={
@@ -29,6 +32,9 @@ def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatc
                 },
             )
         if request.url.path == "/api/v1/responses":
+            payload = json.loads(request.content)
+            assert payload["max_output_tokens"] == 768
+            assert payload["reasoning"] == {"effort": "high", "summary": "auto"}
             return httpx.Response(200, json={"id": "resp_1", "object": "response"})
         if request.url.path == "/api/v1/messages":
             return httpx.Response(200, json={"id": "msg_1", "type": "message"})
@@ -86,8 +92,18 @@ def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatc
         return httpx.Response(404, json={"error": {"message": "missing"}})
 
     with GlobalRouter(base_url="http://testserver", transport=httpx.MockTransport(handler)) as c:
-        assert c.chat.send(model="mock-chat", messages=[]).id == "chat_1"
-        assert c.responses.create(model="mock-chat", input="hello").id == "resp_1"
+        assert c.chat.send(
+            model="mock-chat",
+            messages=[],
+            max_completion_tokens=512,
+            reasoning={"enabled": True, "exclude": True},
+        ).id == "chat_1"
+        assert c.responses.create(
+            model="mock-chat",
+            input="hello",
+            max_output_tokens=768,
+            reasoning={"effort": "high", "summary": "auto"},
+        ).id == "resp_1"
         assert c.messages.create(model="mock-chat", messages=[]).id == "msg_1"
         assert c.embeddings.create(model="mock-embedding", input="hello").data
         assert c.models.list().data[0]["id"] == "qwen3-32b"

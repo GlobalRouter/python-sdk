@@ -29,6 +29,15 @@ client = GlobalRouter()
 chat = client.chat.send(
     models=["qwen3-32b"],
     messages=[{"role": "user", "content": "Use the first available model"}],
+    max_completion_tokens=1024,
+    reasoning={"enabled": True, "exclude": True},
+)
+
+response = client.responses.create(
+    model="qwen3.8-max",
+    input="Explain the result briefly",
+    max_output_tokens=1024,
+    reasoning={"effort": "high", "summary": "auto"},
 )
 
 for chunk in client.chat.stream(
@@ -41,6 +50,11 @@ models = client.models.list()
 credits = client.credits.get()
 providers = client.providers.list()
 ```
+
+Use `max_completion_tokens` for Chat Completions and `max_output_tokens` for
+Responses. `reasoning.enabled`, `reasoning.max_tokens`, and `reasoning.exclude`
+are OpenRouter/GlobalRouter compatibility extensions; upstream support still
+depends on the selected provider and model.
 
 Available OpenRouter-compatible resources:
 
