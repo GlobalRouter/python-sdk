@@ -516,11 +516,17 @@ class TasksResource(BaseResource):
 
 class ImagesResource(BaseResource):
     def generate(self, request: Optional[Mapping[str, Any]] = None, **params: Any) -> APIResponse:
-        return self._client.request_model(
+        payload = self._payload(request, params)
+        path = (
+            "/api/v1/images"
+            if isinstance(payload.get("provider"), dict)
+            else "/v1/images/generations"
+        )
+        return self._client.request_model_once(
             "POST",
-            "/v1/images/generations",
+            path,
             APIResponse,
-            json_body=self._payload(request, params),
+            json_body=payload,
         )
 
     async def generate_async(
@@ -528,11 +534,17 @@ class ImagesResource(BaseResource):
         request: Optional[Mapping[str, Any]] = None,
         **params: Any,
     ) -> APIResponse:
-        return await self._client.request_model_async(
+        payload = self._payload(request, params)
+        path = (
+            "/api/v1/images"
+            if isinstance(payload.get("provider"), dict)
+            else "/v1/images/generations"
+        )
+        return await self._client.request_model_once_async(
             "POST",
-            "/v1/images/generations",
+            path,
             APIResponse,
-            json_body=self._payload(request, params),
+            json_body=payload,
         )
 
 
