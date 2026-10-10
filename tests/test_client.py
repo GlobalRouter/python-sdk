@@ -12,6 +12,61 @@ import pytest
 from globalrouter import GlobalRouter, GlobalRouterError
 
 
+@pytest.mark.parametrize("as_mapping", [False, True])
+def test_image_watermark_false_uses_direct_image_contract_once(as_mapping: bool) -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(502, json={"error": {"message": "unavailable"}})
+
+    payload = {
+        "model": "doubao-seedream-5-0-pro-260628",
+        "prompt": "一只像素风格的花猫坐在草坪上",
+        "n": 1,
+        "size": "2048x2048",
+        "provider": {"provider_id": "doubao"},
+        "response_format": "b64_json",
+        "watermark": False,
+    }
+    with GlobalRouter(
+        api_key="test-key", base_url="https://router.test",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(GlobalRouterError):
+            if as_mapping:
+                client.images.generate(payload)
+            else:
+                client.images.generate(**payload)
+    assert len(requests) == 1
+    assert requests[0].url.path == "/api/v1/images"
+    assert json.loads(requests[0].content) == payload
+
+
+@pytest.mark.asyncio
+async def test_async_image_watermark_false_uses_direct_image_contract_once() -> None:
+    requests: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"created": 1, "data": [{"b64_json": "AAAA"}]})
+
+    payload = {
+        "model": "doubao-seedream-5-0-pro-260628",
+        "prompt": "一只像素风格的花猫坐在草坪上",
+        "provider": {"provider_id": "doubao"},
+        "watermark": False,
+    }
+    async with GlobalRouter(
+        api_key="test-key", base_url="https://router.test",
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        assert (await client.images.generate_async(payload)).data[0]["b64_json"] == "AAAA"
+    assert len(requests) == 1
+    assert requests[0].url.path == "/api/v1/images"
+    assert json.loads(requests[0].content) == payload
+
+
 def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GLOBALROUTER_API_KEY", "sk-test-local")
     requests: list[httpx.Request] = []
