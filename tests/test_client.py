@@ -12,6 +12,38 @@ import pytest
 from globalrouter import GlobalRouter, GlobalRouterError
 
 
+@pytest.mark.parametrize("streaming", [False, True])
+def test_doubao_encrypted_reasoning_roundtrip(streaming: bool) -> None:
+    opaque = "opaque+/state=="
+    sent = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        sent.append(payload)
+        message = {"role": "assistant", "content": "", "encrypted_content": opaque}
+        field = "delta" if payload.get("stream") else "message"
+        body = {"id": "c1", "model": payload["model"], "choices": [{"index": 0, field: message}]}
+        if payload.get("stream"):
+            return httpx.Response(200, text=f"data: {json.dumps(body)}\n\ndata: [DONE]\n\n",
+                                  headers={"content-type": "text/event-stream"})
+        return httpx.Response(200, json=body)
+
+    with GlobalRouter(api_key="test-key", base_url="https://router.test",
+                      transport=httpx.MockTransport(handler)) as client:
+        messages = [{"role": "user", "content": "hello"}]
+        model = "doubao-seed-2-1-pro-260915"
+        if streaming:
+            chunks = list(client.chat.stream(model=model, messages=messages))
+            assistant = chunks[0].choices[0]["delta"]
+        else:
+            assistant = client.chat.send(model=model, messages=messages).choices[0]["message"]
+        assert assistant["encrypted_content"] == opaque
+        client.chat.send(model=model, messages=[
+            *messages, assistant, {"role": "user", "content": "continue"},
+        ])
+    assert sent[1]["messages"][1]["encrypted_content"] == opaque
+
+
 @pytest.mark.parametrize("as_mapping", [False, True])
 def test_image_watermark_false_uses_direct_image_contract_once(as_mapping: bool) -> None:
     requests: list[httpx.Request] = []
