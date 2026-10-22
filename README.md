@@ -19,6 +19,27 @@ with GlobalRouter(api_key=os.environ["GLOBALROUTER_API_KEY"]) as client:
     print(response.choices[0]["message"]["content"])
 ```
 
+## Chat 内容透传
+
+`messages[].content[]` 支持 `video`、`video_url`、`input_audio`、`file`
+以及上游自定义类型。通用 Chat 链路保留类型和扩展字段；上游模型是否支持由上游判断。
+原生协议适配器无法转换的类型会明确报错。
+
+```python
+response = client.chat.send(
+    model="gemini-3.8-flash",
+    messages=[{"role": "user", "content": [
+        {"type": "text", "text": "描述视频"},
+        {"type": "video_url", "video_url": {"url": "https://example.com/video.mp4"}},
+    ]}],
+)
+```
+
+音频使用 `{"type": "input_audio", "input_audio": {"data": "<base64>", "format": "wav"}}`；
+文件使用 `{"type": "file", "file": {"file_id": "<上游文件 ID>"}}` 或
+`{"type": "file", "file": {"filename": "test.pdf", "file_data": "<data URL>"}}`。
+文件 ID 必须属于实际接收请求的上游，不会自动上传或跨 provider 搬运。
+
 ## OpenRouter-Compatible Surface
 
 The default high-level resources use GlobalRouter's `/api/v1/*` OpenRouter-compatible facade.
