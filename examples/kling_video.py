@@ -12,6 +12,9 @@ def main() -> None:
         task = client.videos.generate(
             model=model,
             prompt="A slow camera move across a clean product workspace.",
+            sr={
+                "resolution": "1080p",
+            },
             input={
                 "duration_seconds": 10,
                 "resolution": "1080p",
@@ -23,6 +26,10 @@ def main() -> None:
 
         current = client.tasks.get(task.id)
         print(current.model_dump(exclude_none=True))
+        print(
+            "The final video is in the task output. If SR fails, the task remains "
+            "successful and returns the original video; inspect metadata.sr for details."
+        )
 
 
 if __name__ == "__main__":

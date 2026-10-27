@@ -55,6 +55,11 @@ async def test_async_video_generation_uses_kling_entry_once() -> None:
                 }
             ]
         },
+        "sr": {
+            "resolution": "1080p",
+            "target_width": 1920,
+            "target_height": 1080,
+        },
     }
     async with GlobalRouter(
         api_key="test-key",
