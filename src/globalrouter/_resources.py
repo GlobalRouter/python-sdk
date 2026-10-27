@@ -339,6 +339,32 @@ class ProvidersResource(BaseResource):
 
 
 class VideosResource(BaseResource):
+    def generate(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> Task:
+        return self._client.request_model_once(
+            "POST",
+            "/api/v1/videos/generations",
+            Task,
+            json_body=self._payload_without_params(request, params, {"idempotency_key"}),
+            headers=_idempotency_header(params.get("idempotency_key")),
+        )
+
+    async def generate_async(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> Task:
+        return await self._client.request_model_once_async(
+            "POST",
+            "/api/v1/videos/generations",
+            Task,
+            json_body=self._payload_without_params(request, params, {"idempotency_key"}),
+            headers=_idempotency_header(params.get("idempotency_key")),
+        )
+
     def create(self, request: Optional[Mapping[str, Any]] = None, **params: Any) -> VideoJob:
         return self._client.request_model_once(
             "POST",

@@ -27,6 +27,52 @@ def test_default_base_url_uses_production_api_domain(monkeypatch: pytest.MonkeyP
         assert client.base_url == "https://api.globalrouter.com"
 
 
+@pytest.mark.asyncio
+async def test_async_video_generation_uses_kling_entry_once() -> None:
+    requests: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            202,
+            json={
+                "id": "task_kling_async",
+                "object": "task",
+                "status": "queued",
+                "type": "video_generation",
+            },
+        )
+
+    payload = {
+        "model": "platform-kling-4",
+        "prompt": "animate",
+        "input": {
+            "references": [
+                {
+                    "type": "image",
+                    "role": "first_frame",
+                    "url": "https://assets.example.test/frame.png",
+                }
+            ]
+        },
+    }
+    async with GlobalRouter(
+        api_key="test-key",
+        base_url="https://router.test",
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        task = await client.videos.generate_async(
+            payload,
+            idempotency_key="idem_kling_async",
+        )
+
+    assert task.id == "task_kling_async"
+    assert len(requests) == 1
+    assert requests[0].url.path == "/api/v1/videos/generations"
+    assert requests[0].headers["idempotency-key"] == "idem_kling_async"
+    assert json.loads(requests[0].content) == payload
+
+
 def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GLOBALROUTER_API_KEY", "sk-test-local")
     requests: list[httpx.Request] = []
@@ -79,6 +125,21 @@ def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatc
                 202,
                 json={"id": "task_video", "object": "video.generation", "status": "queued"},
             )
+        if request.url.path == "/api/v1/videos/generations":
+            payload = json.loads(request.content)
+            assert request.headers["idempotency-key"] == "idem_kling"
+            assert "idempotency_key" not in payload
+            assert payload["model"] == "platform-kling-4"
+            assert payload["input"]["references"][0]["id"] == "video_1"
+            return httpx.Response(
+                202,
+                json={
+                    "id": "task_kling",
+                    "object": "task",
+                    "status": "queued",
+                    "type": "video_generation",
+                },
+            )
         if request.url.path == "/api/v1/videos/task_video":
             return httpx.Response(
                 200,
@@ -108,6 +169,21 @@ def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatc
         assert c.keys.delete("key_2").deleted is True
         assert c.providers.list().data[0]["id"] == "doubao"
         assert c.videos.create(model="seedance-video", prompt="demo", idempotency_key="idem_1").id
+        assert c.videos.generate(
+            model="platform-kling-4",
+            prompt="animate",
+            input={
+                "references": [
+                    {
+                        "type": "video",
+                        "role": "base_video",
+                        "url": "https://assets.example.test/source.mp4",
+                        "id": "video_1",
+                    }
+                ]
+            },
+            idempotency_key="idem_kling",
+        ).id == "task_kling"
         assert c.videos.get("task_video").status == "completed"
         assert c.videos.content("task_video").data[0]["url"]
         assert c.videos.models().data[0]["id"] == "seedance-video"

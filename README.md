@@ -112,7 +112,13 @@ Available native resources:
   - `await client.audio.seed_audio_async(...)`
 - `client.three_d`
 
-`tasks.create`, `tasks.create_batch`, `tasks.retry`, `videos.create`, and
+`client.images.generate(...)` 接收对象形式的 `provider` 时调用 `/api/v1/images`，
+支持 `provider={"provider_id": "doubao"}` 和顶层 `watermark=False`。
+字符串形式或省略 `provider` 时仍使用 `/v1/images/generations`。
+同步及异步图片提交均只发送一次；结果未知时请核对原请求，避免重复计费。
+
+`tasks.create`, `tasks.create_batch`, `tasks.retry`, `videos.create`,
+`videos.generate`, and
 `three_d.generate` are sent once and are never automatically retried by the SDK.
 If their outcome is unknown, query the task first; any caller-initiated retry must
 reuse the same `idempotency_key` where the API supports it.
@@ -138,6 +144,12 @@ used without waiting for an SDK release. Configure only the GlobalRouter API
 key; do not send a Volcengine `X-Api-Key`. GlobalRouter selects the dedicated
 `doubao_audio` provider and its upstream credential on the server, so the SDK
 does not send a `provider` field.
+
+`client.videos.generate(...)` posts to `/api/v1/videos/generations`, the only
+supported entry for Kling 4.0 video generation. The older `client.videos.create`
+remains the OpenRouter-compatible `/api/v1/videos` entry. The runnable
+`examples/kling_video.py` example reads `GLOBALROUTER_KLING_MODEL` and performs
+one create request followed by one task lookup.
 
 ## Async
 
