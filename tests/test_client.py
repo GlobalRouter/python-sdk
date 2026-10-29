@@ -73,7 +73,7 @@ async def test_async_video_generation_uses_kling_entry_once() -> None:
 
     assert task.id == "task_kling_async"
     assert len(requests) == 1
-    assert requests[0].url.path == "/api/v1/videos/generations"
+    assert requests[0].url.path == "/v1/videos/generations"
     assert requests[0].headers["idempotency-key"] == "idem_kling_async"
     assert json.loads(requests[0].content) == payload
 
@@ -130,7 +130,7 @@ def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatc
                 202,
                 json={"id": "task_video", "object": "video.generation", "status": "queued"},
             )
-        if request.url.path == "/api/v1/videos/generations":
+        if request.url.path == "/v1/videos/generations":
             payload = json.loads(request.content)
             assert request.headers["idempotency-key"] == "idem_kling"
             assert "idempotency_key" not in payload

@@ -145,11 +145,12 @@ key; do not send a Volcengine `X-Api-Key`. GlobalRouter selects the dedicated
 `doubao_audio` provider and its upstream credential on the server, so the SDK
 does not send a `provider` field.
 
-`client.videos.generate(...)` posts to `/api/v1/videos/generations`, the only
-supported entry for Kling 4.0 video generation. The older `client.videos.create`
-remains the OpenRouter-compatible `/api/v1/videos` entry. The runnable
-`examples/kling_video.py` example reads `GLOBALROUTER_KLING_MODEL` and performs
-one create request followed by one task lookup.
+`client.videos.generate(...)` posts to `/v1/videos/generations`.
+`client.videos.generate(...)` and the OpenRouter-compatible
+`client.videos.create(...)` at `/api/v1/videos` both support Kling 4.0 video
+generation. The runnable `examples/kling_video.py` example reads
+`GLOBALROUTER_KLING_MODEL` and performs one create request followed by one task
+lookup.
 
 ## Async
 

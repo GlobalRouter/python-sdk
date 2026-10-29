@@ -346,7 +346,7 @@ class VideosResource(BaseResource):
     ) -> Task:
         return self._client.request_model_once(
             "POST",
-            "/api/v1/videos/generations",
+            "/v1/videos/generations",
             Task,
             json_body=self._payload_without_params(request, params, {"idempotency_key"}),
             headers=_idempotency_header(params.get("idempotency_key")),
@@ -359,7 +359,7 @@ class VideosResource(BaseResource):
     ) -> Task:
         return await self._client.request_model_once_async(
             "POST",
-            "/api/v1/videos/generations",
+            "/v1/videos/generations",
             Task,
             json_body=self._payload_without_params(request, params, {"idempotency_key"}),
             headers=_idempotency_header(params.get("idempotency_key")),
