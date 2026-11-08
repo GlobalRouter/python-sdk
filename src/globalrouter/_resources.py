@@ -117,17 +117,28 @@ class ResponsesResource(BaseResource):
 
 
 class MessagesResource(BaseResource):
-    def create(self, request: Optional[Mapping[str, Any]] = None, **params: Any) -> APIResponse:
+    def create(
+        self,
+        request: Optional[Mapping[str, Any]] = None,
+        *,
+        anthropic_version: Optional[str] = None,
+        anthropic_beta: Optional[str] = None,
+        **params: Any,
+    ) -> APIResponse:
         return self._client.request_model(
             "POST",
             "/api/v1/messages",
             APIResponse,
             json_body=self._payload(request, params),
+            headers=_messages_protocol_headers(anthropic_version, anthropic_beta),
         )
 
     async def create_async(
         self,
         request: Optional[Mapping[str, Any]] = None,
+        *,
+        anthropic_version: Optional[str] = None,
+        anthropic_beta: Optional[str] = None,
         **params: Any,
     ) -> APIResponse:
         return await self._client.request_model_async(
@@ -135,7 +146,23 @@ class MessagesResource(BaseResource):
             "/api/v1/messages",
             APIResponse,
             json_body=self._payload(request, params),
+            headers=_messages_protocol_headers(anthropic_version, anthropic_beta),
         )
+
+
+def _messages_protocol_headers(
+    anthropic_version: Optional[str],
+    anthropic_beta: Optional[str],
+) -> Optional[dict[str, str]]:
+    headers = {
+        key: value
+        for key, value in {
+            "anthropic-version": anthropic_version,
+            "anthropic-beta": anthropic_beta,
+        }.items()
+        if value is not None
+    }
+    return headers or None
 
 
 class EmbeddingsResource(BaseResource):

@@ -197,6 +197,77 @@ def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatc
     assert all(request.headers["authorization"] == "Bearer sk-test-local" for request in requests)
 
 
+def test_messages_forwards_body_and_protocol_headers() -> None:
+    requests: list[httpx.Request] = []
+    payload = {
+        "model": "generic-messages-model",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "hello"},
+                    {"type": "vendor_block", "value": None},
+                ],
+            }
+        ],
+        "max_completion_tokens": 128,
+        "vendor_extension": {"values": [1, None]},
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"id": "msg_generic", "type": "message"})
+
+    with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        response = client.messages.create(
+            payload,
+            anthropic_version="2025-01-01",
+            anthropic_beta="messages-vendor-beta",
+        )
+
+    assert response.id == "msg_generic"
+    assert len(requests) == 1
+    assert requests[0].url.path == "/api/v1/messages"
+    assert requests[0].headers["anthropic-version"] == "2025-01-01"
+    assert requests[0].headers["anthropic-beta"] == "messages-vendor-beta"
+    assert json.loads(requests[0].content) == payload
+
+
+@pytest.mark.asyncio
+async def test_messages_async_forwards_body_and_protocol_headers() -> None:
+    requests: list[httpx.Request] = []
+    payload = {
+        "model": "generic-messages-model",
+        "messages": [{"role": "user", "content": "hello"}],
+    }
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"id": "msg_generic_async", "type": "message"})
+
+    async with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        response = await client.messages.create_async(
+            payload,
+            anthropic_version="2025-01-01",
+            anthropic_beta="messages-vendor-beta",
+        )
+
+    assert response.id == "msg_generic_async"
+    assert len(requests) == 1
+    assert requests[0].url.path == "/api/v1/messages"
+    assert requests[0].headers["anthropic-version"] == "2025-01-01"
+    assert requests[0].headers["anthropic-beta"] == "messages-vendor-beta"
+    assert json.loads(requests[0].content) == payload
+
+
 def test_native_surface_sse_streaming_and_images() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/api/v1/chat/completions":

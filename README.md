@@ -79,6 +79,32 @@ Available OpenRouter-compatible resources:
 - `client.videos`
 - `client.images`
 
+### Messages
+
+`client.messages.create(...)` and `client.messages.create_async(...)` use the
+OpenRouter-compatible `/api/v1/messages` synchronous response shape. Request
+objects are forwarded unchanged, so fields used by database-configured generic
+Messages models are preserved. Explicit protocol headers are keyword-only
+arguments and never enter the JSON body:
+
+```python
+response = client.messages.create(
+    {
+        "model": os.environ["GLOBALROUTER_MESSAGES_MODEL"],
+        "messages": [{"role": "user", "content": "Hello"}],
+        "max_completion_tokens": 128,
+        "vendor_extension": {"enabled": True},
+    },
+    anthropic_version="2025-01-01",
+    anthropic_beta="messages-vendor-beta",
+)
+```
+
+Unknown fields are forwarded only where the server-side model configuration and
+upstream provider permit them; legacy/custom models retain their existing
+validation and conversion behavior. The runnable example is
+`examples/create_messages.py`.
+
 ## Native GlobalRouter Surface
 
 Native resources use GlobalRouter's `/v1/*` APIs for tasks and resource-specific
