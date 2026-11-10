@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Iterator, Mapping
+from collections.abc import AsyncGenerator, AsyncIterator, Generator, Iterator, Mapping
 from contextlib import closing
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional, overload
+
+from pydantic import TypeAdapter
 
 from globalrouter._models import (
     APIResponse,
@@ -42,6 +44,26 @@ class BaseResource:
             request,
             {key: value for key, value in params.items() if key not in excluded},
         )
+
+    def _stream_result(
+        self, path: str, payload: JSONDict, headers: Optional[dict[str, str]] = None,
+    ) -> Generator[APIResponse, None, None]:
+        with closing(
+            self._client.stream("POST", path, json_body=payload, headers=headers)
+        ) as response:
+            yield from iter_sse_models(response, APIResponse)
+
+    async def _stream_result_async(
+        self, path: str, payload: JSONDict, headers: Optional[dict[str, str]] = None,
+    ) -> AsyncGenerator[APIResponse, None]:
+        response = await self._client.stream_async(
+            "POST", path, json_body=payload, headers=headers,
+        )
+        try:
+            async for item in aiter_sse_models(response, APIResponse):
+                yield item
+        finally:
+            await response.aclose()
 
 
 class ChatResource(BaseResource):
@@ -95,28 +117,81 @@ class ChatResource(BaseResource):
 
 
 class ResponsesResource(BaseResource):
-    def create(self, request: Optional[Mapping[str, Any]] = None, **params: Any) -> APIResponse:
+    @overload
+    def create(
+        self, request: None = None, *, stream: Literal[True], **params: Any,
+    ) -> Generator[APIResponse, None, None]: ...
+
+    @overload
+    def create(
+        self, request: None = None, *, stream: Literal[False, None] = None, **params: Any,
+    ) -> APIResponse: ...
+
+    @overload
+    def create(
+        self, request: Optional[Mapping[str, Any]] = None, **params: Any,
+    ) -> APIResponse | Generator[APIResponse, None, None]: ...
+
+    def create(
+        self, request: Optional[Mapping[str, Any]] = None, **params: Any,
+    ) -> APIResponse | Generator[APIResponse, None, None]:
+        payload = self._payload(request, params)
+        if _wants_stream(payload):
+            return self._stream_result("/api/v1/responses", payload)
         return self._client.request_model(
             "POST",
             "/api/v1/responses",
             APIResponse,
-            json_body=self._payload(request, params),
+            json_body=payload,
         )
+
+    @overload
+    async def create_async(
+        self, request: None = None, *, stream: Literal[True], **params: Any,
+    ) -> AsyncGenerator[APIResponse, None]: ...
+
+    @overload
+    async def create_async(
+        self, request: None = None, *, stream: Literal[False, None] = None, **params: Any,
+    ) -> APIResponse: ...
+
+    @overload
+    async def create_async(
+        self, request: Optional[Mapping[str, Any]] = None, **params: Any,
+    ) -> APIResponse | AsyncGenerator[APIResponse, None]: ...
 
     async def create_async(
         self,
         request: Optional[Mapping[str, Any]] = None,
         **params: Any,
-    ) -> APIResponse:
+    ) -> APIResponse | AsyncGenerator[APIResponse, None]:
+        payload = self._payload(request, params)
+        if _wants_stream(payload):
+            return self._stream_result_async("/api/v1/responses", payload)
         return await self._client.request_model_async(
             "POST",
             "/api/v1/responses",
             APIResponse,
-            json_body=self._payload(request, params),
+            json_body=payload,
         )
 
 
 class MessagesResource(BaseResource):
+    @overload
+    def create(
+        self, request: None = None, *, stream: Literal[True], **params: Any,
+    ) -> Generator[APIResponse, None, None]: ...
+
+    @overload
+    def create(
+        self, request: None = None, *, stream: Literal[False, None] = None, **params: Any,
+    ) -> APIResponse: ...
+
+    @overload
+    def create(
+        self, request: Optional[Mapping[str, Any]] = None, **params: Any,
+    ) -> APIResponse | Generator[APIResponse, None, None]: ...
+
     def create(
         self,
         request: Optional[Mapping[str, Any]] = None,
@@ -124,14 +199,33 @@ class MessagesResource(BaseResource):
         anthropic_version: Optional[str] = None,
         anthropic_beta: Optional[str] = None,
         **params: Any,
-    ) -> APIResponse:
+    ) -> APIResponse | Generator[APIResponse, None, None]:
+        payload = self._payload(request, params)
+        headers = _messages_protocol_headers(anthropic_version, anthropic_beta)
+        if _wants_stream(payload):
+            return self._stream_result("/api/v1/messages", payload, headers)
         return self._client.request_model(
             "POST",
             "/api/v1/messages",
             APIResponse,
-            json_body=self._payload(request, params),
-            headers=_messages_protocol_headers(anthropic_version, anthropic_beta),
+            json_body=payload,
+            headers=headers,
         )
+
+    @overload
+    async def create_async(
+        self, request: None = None, *, stream: Literal[True], **params: Any,
+    ) -> AsyncGenerator[APIResponse, None]: ...
+
+    @overload
+    async def create_async(
+        self, request: None = None, *, stream: Literal[False, None] = None, **params: Any,
+    ) -> APIResponse: ...
+
+    @overload
+    async def create_async(
+        self, request: Optional[Mapping[str, Any]] = None, **params: Any,
+    ) -> APIResponse | AsyncGenerator[APIResponse, None]: ...
 
     async def create_async(
         self,
@@ -140,14 +234,23 @@ class MessagesResource(BaseResource):
         anthropic_version: Optional[str] = None,
         anthropic_beta: Optional[str] = None,
         **params: Any,
-    ) -> APIResponse:
+    ) -> APIResponse | AsyncGenerator[APIResponse, None]:
+        payload = self._payload(request, params)
+        headers = _messages_protocol_headers(anthropic_version, anthropic_beta)
+        if _wants_stream(payload):
+            return self._stream_result_async("/api/v1/messages", payload, headers)
         return await self._client.request_model_async(
             "POST",
             "/api/v1/messages",
             APIResponse,
-            json_body=self._payload(request, params),
-            headers=_messages_protocol_headers(anthropic_version, anthropic_beta),
+            json_body=payload,
+            headers=headers,
         )
+
+
+def _wants_stream(payload: JSONDict) -> bool:
+    value = payload.get("stream")
+    return value is not None and TypeAdapter(bool).validate_python(value)
 
 
 def _messages_protocol_headers(
