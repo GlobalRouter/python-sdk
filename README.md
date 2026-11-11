@@ -81,8 +81,8 @@ Available OpenRouter-compatible resources:
 
 ### Messages
 
-`client.messages.create(...)` and `client.messages.create_async(...)` use the
-OpenRouter-compatible `/api/v1/messages` synchronous response shape. Request
+`client.messages.create(...)` and `client.messages.create_async(...)` use
+`/api/v1/messages`. Request
 objects are forwarded unchanged, so fields used by database-configured generic
 Messages models are preserved. Explicit protocol headers are keyword-only
 arguments and never enter the JSON body:
@@ -104,6 +104,32 @@ Unknown fields are forwarded only where the server-side model configuration and
 upstream provider permit them; legacy/custom models retain their existing
 validation and conversion behavior. The runnable example is
 `examples/create_messages.py`.
+
+### Messages / Responses 流与回滚兼容
+
+`messages.create`、`responses.create` 在 `stream=true` 时返回同步迭代器；
+`await create_async(...)` 返回异步迭代器。缺省、`false` 或 `null` 返回
+`APIResponse`。generic Messages 保留全部 content 块，Responses 保留完整
+output 与事件，请按 `type` 遍历，避免固定读取第一项文本。
+
+```python
+from contextlib import closing
+
+with closing(client.messages.create(
+    model=os.environ["GLOBALROUTER_MESSAGES_MODEL"],
+    messages=[{"role": "user", "content": "Hello"}],
+    stream=True,
+)) as events:
+    for event in events:
+        print(event.model_dump(exclude_unset=True))
+```
+
+异步调用使用 `contextlib.aclosing` 包裹 `await client.responses.create_async(...)`
+返回的流；提前退出时应关闭迭代器。图片 Responses 在生成完成后输出
+`response.created` 和 `response.completed`，不提供增量图片。
+新版 SDK 根据 Content-Type 读取 SSE；回滚服务返回普通 JSON 时，
+同一迭代器完整产出一次 JSON 对象。此兼容不会为获取另一种格式再发送生成请求。
+客户端既有的 HTTP 故障重试设置仍独立生效；真实验收应关闭或记录这些重试。
 
 ## Native GlobalRouter Surface
 
