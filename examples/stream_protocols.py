@@ -16,6 +16,7 @@ def messages() -> None:
         )
         with closing(events) as stream:
             for event in stream:
+                # 内容可以先到达；应消费到 message_stop 或处理流中的异常。
                 print(event.model_dump(exclude_unset=True))
 
 

@@ -112,6 +112,11 @@ validation and conversion behavior. The runnable example is
 `APIResponse`。generic Messages 保留全部 content 块，Responses 保留完整
 output 与事件，请按 `type` 遍历，避免固定读取第一项文本。
 
+generic 文本模型的 `/api/v1/messages` 与 `/v1/messages` 均支持 SSE，
+保留 thinking、tool_use 及其增量。内容可能先于结算到达；
+只有收到 `message_stop` 才表示该流成功结束。最终 usage 缺失、非法或
+结算失败会返回错误事件，SDK 抛出 `GlobalRouterError`，不会重试已开始的流。
+
 ```python
 from contextlib import closing
 

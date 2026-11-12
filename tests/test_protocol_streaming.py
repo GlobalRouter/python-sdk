@@ -71,6 +71,46 @@ def wire(protocol: str, media: str, failure: bool = False) -> bytes:
     return f"event: {event['type']}\ndata: {json.dumps(event)}\n\n".encode()
 
 
+@pytest.mark.parametrize("failure", [False, True])
+def test_compat_messages_incremental_blocks_and_terminal(failure):
+    events = [
+        {"type": "message_start", "message": {"id": "msg_1", "role": "assistant"}},
+        {"type": "content_block_delta", "index": 0,
+         "delta": {"type": "thinking_delta", "thinking": "reason"}},
+        {"type": "content_block_start", "index": 1,
+         "content_block": {"type": "tool_use", "id": "call_1", "name": "lookup", "input": {}}},
+        {"type": "content_block_delta", "index": 1,
+         "delta": {"type": "input_json_delta", "partial_json": '{"x":1}'}},
+    ]
+    terminal = [
+        {"type": "message_delta", "delta": {"stop_reason": "tool_use"},
+         "usage": {"output_tokens": 5}},
+        {"type": "message_stop"},
+    ] if not failure else [
+        {"type": "error", "error": {"type": "api_error", "message": "invalid final usage"}},
+    ]
+    body = SyncBody("".join(
+        f"event: {event['type']}\ndata: {json.dumps(event)}\n\n"
+        for event in [*events, *terminal]
+    ).encode())
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, headers={"content-type": "text/event-stream"}, stream=body)
+
+    with GlobalRouter(api_key="controlled", transport=httpx.MockTransport(handler)) as client:
+        stream = client.messages.create(model="m", messages=[], stream=True)
+        assert [next(stream).model_dump(exclude_unset=True) for _ in events] == events
+        if failure:
+            with pytest.raises(GlobalRouterError, match="invalid final usage"):
+                list(stream)
+        else:
+            assert [event.model_dump(exclude_unset=True) for event in stream] == terminal
+    assert len(requests) == 1 and requests[0].url.path == "/api/v1/messages"
+    assert body.closed
+
+
 @pytest.mark.parametrize("protocol", ["messages", "responses"])
 @pytest.mark.parametrize("media", ["application/json", "text/event-stream"])
 @pytest.mark.parametrize("early_close", [False, True])
