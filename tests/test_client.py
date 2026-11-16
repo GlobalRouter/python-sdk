@@ -197,6 +197,132 @@ def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatc
     assert all(request.headers["authorization"] == "Bearer sk-test-local" for request in requests)
 
 
+def test_ali_video_data_inspection_examples_use_supported_entry_points() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.method == "POST"
+        assert request.url.path == "/api/v1/videos"
+        data_inspection = request.headers.get("X-DashScope-DataInspection")
+        payload = json.loads(request.content)
+        if data_inspection is None:
+            assert request.headers["idempotency-key"] == "idem_ali_body"
+            assert payload == {
+                "model": "wan3.0-video",
+                "prompt": "Ali body options",
+                "provider": {
+                    "provider_id": "ali",
+                    "options": {
+                        "ali": {
+                            "dataInspection": {
+                                "input": "disable",
+                                "output": "disable",
+                            }
+                        }
+                    },
+                },
+            }
+            return httpx.Response(
+                202,
+                json={"id": "task_video_body", "object": "video.generation", "status": "queued"},
+            )
+        assert "idempotency-key" not in request.headers
+        assert data_inspection == '{"input":"disable","output":"disable"}'
+        assert payload == {
+            "model": "wan3.0-video",
+            "prompt": "Ali header compatibility",
+        }
+        return httpx.Response(
+            202,
+            json={"id": "task_video_header", "object": "video.generation", "status": "queued"},
+        )
+
+    with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        assert client.videos.create(
+            model="wan3.0-video",
+            prompt="Ali body options",
+            provider={
+                "provider_id": "ali",
+                "options": {
+                    "ali": {
+                        "dataInspection": {
+                            "input": "disable",
+                            "output": "disable",
+                        }
+                    }
+                },
+            },
+            idempotency_key="idem_ali_body",
+        ).id == "task_video_body"
+        header_response = client.request_once(
+            "POST",
+            "/api/v1/videos",
+            json_body={
+                "model": "wan3.0-video",
+                "prompt": "Ali header compatibility",
+            },
+            headers={
+                "X-DashScope-DataInspection": (
+                    '{"input":"disable","output":"disable"}'
+                )
+            },
+        )
+        assert header_response.json()["id"] == "task_video_header"
+
+    assert len(requests) == 2
+
+
+@pytest.mark.asyncio
+async def test_ali_data_inspection_examples_do_not_retry_failed_posts() -> None:
+    requests: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            500,
+            json={"error": {"message": "upstream unavailable"}},
+            request=request,
+        )
+
+    async with GlobalRouter(
+        api_key="test-key",
+        base_url="https://router.test",
+        max_retries=5,
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        with pytest.raises(GlobalRouterError):
+            await client.videos.create_async(
+                {
+                    "model": "wan3.0-video",
+                    "prompt": "single body post",
+                    "provider": {
+                        "provider_id": "ali",
+                        "options": {
+                            "ali": {"dataInspection": {"input": "disable"}}
+                        },
+                    },
+                }
+            )
+        with pytest.raises(GlobalRouterError):
+            await client.request_once_async(
+                "POST",
+                "/api/v1/videos",
+                json_body={
+                    "model": "wan3.0-video",
+                    "prompt": "single header post",
+                },
+                headers={"X-DashScope-DataInspection": '{"input":"disable"}'},
+            )
+
+    assert len(requests) == 2
+    assert all(request.url.path == "/api/v1/videos" for request in requests)
+
+
 def test_messages_forwards_body_and_protocol_headers() -> None:
     requests: list[httpx.Request] = []
     payload = {
