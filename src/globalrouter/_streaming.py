@@ -12,6 +12,19 @@ T = TypeVar("T", bound=BaseModel)
 
 
 def iter_sse_models(response: httpx.Response, model: type[T]) -> Iterator[T]:
+    try:
+        if _is_json(response):
+            response.read()
+            item = _model_from_sse_data([response.text], model)
+            if item is not None:
+                yield item
+            return
+        yield from _iter_events(response, model)
+    finally:
+        response.close()
+
+
+def _iter_events(response: httpx.Response, model: type[T]) -> Iterator[T]:
     data_lines: list[str] = []
     for line in response.iter_lines():
         if line == "":
@@ -35,6 +48,20 @@ def iter_sse_models(response: httpx.Response, model: type[T]) -> Iterator[T]:
 
 
 async def aiter_sse_models(response: httpx.Response, model: type[T]) -> AsyncIterator[T]:
+    try:
+        if _is_json(response):
+            await response.aread()
+            item = _model_from_sse_data([response.text], model)
+            if item is not None:
+                yield item
+            return
+        async for item in _aiter_events(response, model):
+            yield item
+    finally:
+        await response.aclose()
+
+
+async def _aiter_events(response: httpx.Response, model: type[T]) -> AsyncIterator[T]:
     data_lines: list[str] = []
     async for line in response.aiter_lines():
         if line == "":
@@ -66,6 +93,11 @@ def _sse_data_value(line: str) -> str | None:
     return value
 
 
+def _is_json(response: httpx.Response) -> bool:
+    media_type: str = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    return media_type == "application/json" or media_type.endswith("+json")
+
+
 def _model_from_sse_data(data_lines: list[str], model: type[T]) -> T | None:
     data = "\n".join(data_lines)
     if data.strip() == "[DONE]":
@@ -73,6 +105,10 @@ def _model_from_sse_data(data_lines: list[str], model: type[T]) -> T | None:
     payload = _json_from_text(data)
     if isinstance(payload, dict) and "error" in payload:
         raise error_from_stream_payload(payload)
+    if isinstance(payload, dict) and payload.get("type") == "response.failed":
+        response = payload.get("response")
+        if isinstance(response, dict) and isinstance(response.get("error"), dict):
+            raise error_from_stream_payload(response)
     return model.model_validate(payload)
 
 

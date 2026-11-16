@@ -16,7 +16,7 @@ class APIResponse(GlobalRouterModel):
     object: Optional[str] = None
     data: Any = None
     status: Optional[str] = None
-    text: Optional[str] = None
+    text: Any = None
 
 
 class ChatCompletion(GlobalRouterModel):
