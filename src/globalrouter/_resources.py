@@ -3,12 +3,14 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Iterator, Mapping
 from contextlib import closing
 from typing import TYPE_CHECKING, Any, Optional
+from urllib.parse import quote
 
 from globalrouter._models import (
     APIResponse,
     ChatCompletion,
     ChatCompletionChunk,
     DeletedObject,
+    GeminiGenerateContentResponse,
     JSONDict,
     ModelList,
     SeedAudioResponse,
@@ -561,6 +563,32 @@ class ImagesResource(BaseResource):
             "GET",
             f"/api/v1/image-tasks/{image_task_id}",
             APIResponse,
+        )
+
+    def generate_content(
+        self,
+        model: str,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> GeminiGenerateContentResponse:
+        return self._client.request_model(
+            "POST",
+            f"/v1beta/models/{quote(model.strip(), safe='')}:generateContent",
+            GeminiGenerateContentResponse,
+            json_body=self._payload(request, params),
+        )
+
+    async def generate_content_async(
+        self,
+        model: str,
+        request: Optional[Mapping[str, Any]] = None,
+        **params: Any,
+    ) -> GeminiGenerateContentResponse:
+        return await self._client.request_model_async(
+            "POST",
+            f"/v1beta/models/{quote(model.strip(), safe='')}:generateContent",
+            GeminiGenerateContentResponse,
+            json_body=self._payload(request, params),
         )
 
 

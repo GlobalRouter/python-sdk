@@ -17,14 +17,13 @@ from globalrouter import GlobalRouter  # noqa: E402, I001
 
 REQUEST_BODY: dict[str, Any] = {
     "model": "jimeng_t2i_v31",
-    "prompt": "生成 4 张电商商品图，白底，高级感",
+    "prompt": "生成一张电商商品图，白底，高级感",
     "input_references": [
         {
             "type": "image_url",
             "image_url": {"url": "https://example.com/reference.png"},
         }
     ],
-    "n": 4,
     "size": "1024x1024",
     "provider": {
         "provider_id": "doubao_gr",

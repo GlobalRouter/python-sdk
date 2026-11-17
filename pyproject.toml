@@ -52,7 +52,8 @@ select = ["E", "F", "I", "UP", "B"]
 ignore = ["UP037", "UP045"]
 
 [tool.mypy]
-python_version = "3.9"
+# Current mypy releases no longer accept Python 3.9 as a type-check target.
+python_version = "3.10"
 strict = true
 warn_unreachable = true
 ignore_missing_imports = false
