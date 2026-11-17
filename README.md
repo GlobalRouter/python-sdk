@@ -53,7 +53,6 @@ reference_url = "https://assets.example.test/reference.jpg"
 image = client.images.generate(
     model="gpt-image-2",
     prompt="Edit the character outfit while preserving facial features.",
-    n=1,
     size="1792x1024",
     provider={"provider_id": "ghyz"},
     input_references=[
@@ -99,12 +98,28 @@ image_task = client.images.create_task(
     prompt="a calm dashboard",
 )
 image_task = client.images.get_task(image_task.id)
+
+gemini_image = client.images.generate_content(
+    "gemini-nano-banana-2.1",
+    contents=[
+        {
+            "role": "user",
+            "parts": [{"text": "A lighthouse at sunset"}],
+        }
+    ],
+    generationConfig={
+        "responseModalities": ["TEXT", "IMAGE"],
+        "imageConfig": {"aspectRatio": "16:9", "imageSize": "2K"},
+    },
+)
 ```
 
 Available native resources:
 
 - `client.tasks`
 - `client.images`
+  - `client.images.generate_content`
+  - `await client.images.generate_content_async`
   - `client.images.create_task`
   - `client.images.get_task`
 - `client.audio`
