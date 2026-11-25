@@ -21,6 +21,10 @@ REQUEST_BODY: dict[str, Any] = {
         {"role": "user", "content": "用三句话介绍 GlobalRouter。"},
     ],
     "stream": False,
+    "metadata": {
+        "customer_user": "张三",
+        "customer_team": "供应链团队",
+    },
 }
 
 

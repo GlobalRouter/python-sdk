@@ -116,6 +116,53 @@ def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatc
     assert all(request.headers["authorization"] == "Bearer sk-test-local" for request in requests)
 
 
+def test_customer_attribution_body_and_headers_are_sent() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "id": "chat_attribution",
+                "object": "chat.completion",
+                "model": "mock-chat",
+                "choices": [{"message": {"role": "assistant", "content": "ok"}}],
+            },
+        )
+
+    with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        client.chat.send(
+            model="mock-chat",
+            messages=[],
+            metadata={
+                "customer_user": "body-user",
+                "customer_team": "body-team",
+            },
+        )
+        client.request(
+            "POST",
+            "/api/v1/responses",
+            json_body={"model": "mock-chat", "input": "hello"},
+            headers={
+                "X-Customer-User": "header-user",
+                "X-Customer-Team": "header-team",
+            },
+        )
+
+    body = json.loads(requests[0].content)
+    assert body["metadata"] == {
+        "customer_user": "body-user",
+        "customer_team": "body-team",
+    }
+    assert requests[1].headers["x-customer-user"] == "header-user"
+    assert requests[1].headers["x-customer-team"] == "header-team"
+
+
 def test_native_surface_sse_streaming_and_images() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/api/v1/chat/completions":
