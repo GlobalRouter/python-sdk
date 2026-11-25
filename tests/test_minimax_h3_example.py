@@ -21,6 +21,8 @@ def test_minimax_h3_example_accepts_gr_model_alias(monkeypatch, capsys):
         "/api/v1/videos", "/api/v1/videos/compatible-task",
     ]
     assert all(body["model"] == "company-video" for _, body in calls if body)
+    assert calls[0][1]["client_reference"] == "example-001"
+    assert "client_reference" not in calls[2][1]
     output = capsys.readouterr().out
     assert "GR 视频创建" in output
     assert "GR 视频查询" in output

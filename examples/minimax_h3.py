@@ -26,6 +26,8 @@ def main() -> None:
         "model": MODEL,
         "content": [{"type": "text", "text": "黄昏海边，镜头缓缓推进"}],
         "resolution": "768P", "duration": 5, "ratio": "16:9",
+        # 顶层额外字段可被接收；本字段当前不提交上游，也不参与计费。
+        "client_reference": "example-001",
     })
     print("原生创建", native)
     print("原生查询", call(f"/v2/query/video_generation/{native['task_id']}"))
