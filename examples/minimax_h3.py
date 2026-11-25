@@ -6,6 +6,8 @@ import urllib.request
 
 BASE_URL = os.environ.get("GLOBALROUTER_BASE_URL", "https://api.globalrouter.com").rstrip("/")
 API_KEY = os.environ["GLOBALROUTER_API_KEY"]
+# 填 GR 模型 ID；上游名称由服务端 relation 映射，不在客户端硬编码。
+MODEL = os.environ.get("GLOBALROUTER_MODEL", "MiniMax-H3")
 
 
 def call(path: str, body: dict | None = None) -> dict:
@@ -21,7 +23,7 @@ def call(path: str, body: dict | None = None) -> dict:
 
 def main() -> None:
     native = call("/v2/video_generation", {
-        "model": "MiniMax-H3",
+        "model": MODEL,
         "content": [{"type": "text", "text": "黄昏海边，镜头缓缓推进"}],
         "resolution": "768P", "duration": 5, "ratio": "16:9",
     })
@@ -29,12 +31,14 @@ def main() -> None:
     print("原生查询", call(f"/v2/query/video_generation/{native['task_id']}"))
 
     compatible = call("/api/v1/videos", {
-        "model": "MiniMax-H3", "prompt": "黄昏海边，镜头缓缓推进",
+        "model": MODEL, "prompt": "黄昏海边，镜头缓缓推进",
         "resolution": "2K", "duration": 5, "aspect_ratio": "16:9",
     })
     print("OpenRouter 创建", compatible)
     print("OpenRouter 查询", call(f"/api/v1/videos/{compatible['id']}"))
-    # 异步任务需持续轮询直到终态；成功前不会有视频 URL。
+    # 异步任务需持续轮询直到终态；有视频结果不代表计费已经结算。
+    # 缺真实计量时任务等待结算；预占估算不作为最终扣费。
+    # 不要在 provider.options 中覆盖公开字段或传入模型名／计量字段。
 
 
 if __name__ == "__main__":
