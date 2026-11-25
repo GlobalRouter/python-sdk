@@ -1,4 +1,4 @@
-"""MiniMax-H3: GR 原生接口与 OpenRouter 视频接口的创建、查询示例。"""
+"""MiniMax-H3: GR 原生接口与 GR 视频接口的创建、查询示例。"""
 
 import json
 import os
@@ -34,8 +34,8 @@ def main() -> None:
         "model": MODEL, "prompt": "黄昏海边，镜头缓缓推进",
         "resolution": "2K", "duration": 5, "aspect_ratio": "16:9",
     })
-    print("OpenRouter 创建", compatible)
-    print("OpenRouter 查询", call(f"/api/v1/videos/{compatible['id']}"))
+    print("GR 视频创建", compatible)
+    print("GR 视频查询", call(f"/api/v1/videos/{compatible['id']}"))
     # 异步任务需持续轮询直到终态；有视频结果不代表计费已经结算。
     # 缺真实计量时任务等待结算；预占估算不作为最终扣费。
     # 不要在 provider.options 中覆盖公开字段或传入模型名／计量字段。

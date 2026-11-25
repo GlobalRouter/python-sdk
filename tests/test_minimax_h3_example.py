@@ -4,7 +4,7 @@ import runpy
 from pathlib import Path
 
 
-def test_minimax_h3_example_accepts_gr_model_alias(monkeypatch):
+def test_minimax_h3_example_accepts_gr_model_alias(monkeypatch, capsys):
     monkeypatch.setenv("GLOBALROUTER_API_KEY", "test-key")
     monkeypatch.setenv("GLOBALROUTER_MODEL", "company-video")
     example = runpy.run_path(str(Path(__file__).parents[1] / "examples/minimax_h3.py"))
@@ -21,3 +21,8 @@ def test_minimax_h3_example_accepts_gr_model_alias(monkeypatch):
         "/api/v1/videos", "/api/v1/videos/compatible-task",
     ]
     assert all(body["model"] == "company-video" for _, body in calls if body)
+    output = capsys.readouterr().out
+    assert "GR 视频创建" in output
+    assert "GR 视频查询" in output
+    assert "openrouter" not in output.lower()
+    assert "openrouter" not in example["__doc__"].lower()
