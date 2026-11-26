@@ -12,7 +12,7 @@ import httpx
 import pytest
 from pydantic import BaseModel
 
-from globalrouter import GlobalRouter, GlobalRouterError
+from globalrouter import GeminiGenerateContentResponse, GlobalRouter, GlobalRouterError
 from globalrouter._streaming import aiter_sse_models, iter_sse_models
 
 
@@ -114,6 +114,53 @@ def test_openrouter_surface_headers_and_resources(monkeypatch: pytest.MonkeyPatc
 
     assert requests
     assert all(request.headers["authorization"] == "Bearer sk-test-local" for request in requests)
+
+
+def test_customer_attribution_body_and_headers_are_sent() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "id": "chat_attribution",
+                "object": "chat.completion",
+                "model": "mock-chat",
+                "choices": [{"message": {"role": "assistant", "content": "ok"}}],
+            },
+        )
+
+    with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        client.chat.send(
+            model="mock-chat",
+            messages=[],
+            metadata={
+                "customer_user": "body-user",
+                "customer_team": "body-team",
+            },
+        )
+        client.request(
+            "POST",
+            "/api/v1/responses",
+            json_body={"model": "mock-chat", "input": "hello"},
+            headers={
+                "X-Customer-User": "header-user",
+                "X-Customer-Team": "header-team",
+            },
+        )
+
+    body = json.loads(requests[0].content)
+    assert body["metadata"] == {
+        "customer_user": "body-user",
+        "customer_team": "body-team",
+    }
+    assert requests[1].headers["x-customer-user"] == "header-user"
+    assert requests[1].headers["x-customer-team"] == "header-team"
 
 
 def test_native_surface_sse_streaming_and_images() -> None:
@@ -221,6 +268,139 @@ def test_native_surface_sse_streaming_and_images() -> None:
         assert client.three_d.generate(model="tripo-3d", prompt="mesh").id == "task_3d"
     finally:
         client.close()
+
+
+def test_images_generate_content_uses_encoded_path_and_typed_response() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.method == "POST"
+        assert request.url.raw_path.split(b"?", 1)[0] == (
+            b"/v1beta/models/team%2Fgemini%20image:generateContent"
+        )
+        assert json.loads(request.content) == {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": "A lighthouse at sunset"}],
+                }
+            ],
+            "generationConfig": {
+                "responseModalities": ["TEXT", "IMAGE"],
+                "imageConfig": {"aspectRatio": "16:9", "imageSize": "2K"},
+            },
+        }
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "content": {
+                            "role": "model",
+                            "parts": [
+                                {"text": "Generated image"},
+                                {
+                                    "inlineData": {
+                                        "mimeType": "image/png",
+                                        "data": "iVBORw0KGgo=",
+                                    }
+                                },
+                            ],
+                        },
+                        "finishReason": "STOP",
+                        "safetyRatings": [
+                            {"category": "HARM_CATEGORY_TEST", "probability": "LOW"}
+                        ],
+                    }
+                ],
+                "modelVersion": "gemini-nano-banana-2.1",
+                "responseId": "response_1",
+                "usageMetadata": {
+                    "promptTokenCount": 12,
+                    "candidatesTokenCount": 1024,
+                    "totalTokenCount": 1036,
+                    "thoughtsTokenCount": 0,
+                },
+            },
+        )
+
+    with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        transport=httpx.MockTransport(handler),
+    ) as client:
+        response = client.images.generate_content(
+            " team/gemini image ",
+            contents=[
+                {
+                    "role": "user",
+                    "parts": [{"text": "A lighthouse at sunset"}],
+                }
+            ],
+            generationConfig={
+                "responseModalities": ["TEXT", "IMAGE"],
+                "imageConfig": {"aspectRatio": "16:9", "imageSize": "2K"},
+            },
+        )
+
+    assert isinstance(response, GeminiGenerateContentResponse)
+    assert response.model_version == "gemini-nano-banana-2.1"
+    assert response.candidates[0].finish_reason == "STOP"
+    assert response.candidates[0].content.parts[0].text == "Generated image"
+    inline_data = response.candidates[0].content.parts[1].inline_data
+    assert inline_data is not None
+    assert inline_data.mime_type == "image/png"
+    assert response.usage_metadata is not None
+    assert response.usage_metadata.total_token_count == 1036
+    assert response.usage_metadata.thoughts_token_count == 0
+    assert len(requests) == 1
+
+
+@pytest.mark.asyncio
+async def test_images_generate_content_async_uses_same_contract() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert request.url.path == (
+            "/v1beta/models/gemini-nano-banana-2.1:generateContent"
+        )
+        assert json.loads(request.content) == {
+            "contents": [{"parts": [{"text": "A quiet harbor"}]}],
+        }
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "content": {
+                            "role": "model",
+                            "parts": [
+                                {
+                                    "inlineData": {
+                                        "mimeType": "image/jpeg",
+                                        "data": "aGFyYm9y",
+                                    }
+                                }
+                            ],
+                        }
+                    }
+                ],
+                "modelVersion": "gemini-nano-banana-2.1",
+            },
+        )
+
+    async with GlobalRouter(
+        api_key="sk-test-local",
+        base_url="http://testserver",
+        async_transport=httpx.MockTransport(handler),
+    ) as client:
+        response = await client.images.generate_content_async(
+            "gemini-nano-banana-2.1",
+            contents=[{"parts": [{"text": "A quiet harbor"}]}],
+        )
+
+    assert response.candidates[0].content.parts[0].inline_data is not None
+    assert response.candidates[0].content.parts[0].inline_data.mime_type == "image/jpeg"
 
 
 def test_seed_audio_sync_uses_gr_auth_mapping_payload_and_typed_response() -> None:

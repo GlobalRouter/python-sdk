@@ -32,7 +32,6 @@ REQUEST_BODY: dict[str, Any] = {
     "quality": "high",
     "seed": 42,
     "stream": False,
-    "n": 1,
 }
 
 

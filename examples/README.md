@@ -14,6 +14,7 @@ Run from `gr_sdk_demo/py_sdk`:
 python examples/create_chat_completion.py
 python examples/create_images.py
 python examples/create_image_task.py
+python examples/generate_gemini_image.py
 python examples/create_video.py
 python examples/create_seed_audio.py
 ```
@@ -23,6 +24,7 @@ python examples/create_seed_audio.py
 - `create_chat_completion.py` -> `POST /api/v1/chat/completions`, via `client.chat.send(...)`.
 - `create_images.py` -> `POST /api/v1/images`, via `client.images.generate(...)`.
 - `create_image_task.py` -> `POST /api/v1/image-tasks`, via `client.images.create_task(...)`.
+- `generate_gemini_image.py` -> `POST /v1beta/models/{model}:generateContent`, via `client.images.generate_content(...)`.
 - `create_video.py` -> `POST /api/v1/videos`, via `client.videos.create(...)`.
 - `create_seed_audio.py` -> `POST /doubao/api/v3/tts/create`, via `client.audio.seed_audio(...)`.
 
